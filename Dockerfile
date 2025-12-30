@@ -1,22 +1,29 @@
-FROM node:24-slim
+# syntax=docker/dockerfile:1
 
-# system deps for node-gyp / native modules (better-sqlite3)
+FROM node:22-slim
+
+WORKDIR /app
+ENV NODE_ENV=production
+ENV PYTHON=/usr/bin/python3
+
+# === ОБЯЗАТЕЛЬНО для better-sqlite3 ===
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 \
     make \
     g++ \
+    pkg-config \
     && rm -rf /var/lib/apt/lists/*
 
-WORKDIR /app
+# === зависимости ===
+COPY package.json package-lock.json ./
+RUN npm ci
 
-# (опционально) чтобы node-gyp точно видел python
-ENV PYTHON=/usr/bin/python3
-
-COPY package*.json ./
-# если есть package-lock.json — лучше npm ci
-RUN if [ -f package-lock.json ]; then npm ci --verbose; else npm install --verbose; fi
-
+# === код ===
 COPY . .
 
-CMD ["npm","run","start"]
+# === сборка Next.js ===
+RUN npm run build
 
+EXPOSE 3000
+
+CMD ["npm", "run", "start"]
