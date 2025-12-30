@@ -1,57 +1,42 @@
-# syntax=docker/dockerfile:1
-
-########################
-# 1. Dependencies
-########################
-FROM node:20-alpine AS deps
-WORKDIR /app
-
-# Нужны для сборки native-модулей (better-sqlite3)
-RUN apk add --no-cache \
-    python3 \
-    make \
-    g++ \
-    sqlite-dev
-
-COPY package.json package-lock.json* ./
-RUN npm install
-
-########################
-# 2. Build
-########################
-FROM node:20-alpine AS builder
-WORKDIR /app
-
-RUN apk add --no-cache \
-    python3 \
-    make \
-    g++ \
-    sqlite-dev
-
-COPY --from=deps /app/node_modules ./node_modules
-COPY . .
-
-# Инициализация БД + сборка Next.js
-RUN npm run db:init && npm run build
-
-########################
-# 3. Runtime
-########################
-FROM node:20-alpine AS runner
-WORKDIR /app
+# ---- Base ----
+FROM node:22-slim
 
 ENV NODE_ENV=production
 
-# Только runtime-зависимости (без build tools)
-RUN apk add --no-cache sqlite-libs
+# System deps for native modules (better-sqlite3 via node-gyp)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    curl \
+    python3 \
+    make \
+    g++ \
+    pkg-config \
+  && rm -rf /var/lib/apt/lists/*
 
-# Next.js standalone output
-COPY --from=builder /app/.next/standalone ./
-COPY --from=builder /app/.next/static ./.next/static
-COPY --from=builder /app/public ./public
+WORKDIR /app
 
-# Данные SQLite
-RUN mkdir -p /app/data
+# Copy only manifests first (better caching)
+COPY package*.json ./
+COPY pnpm-lock.yaml* yarn.lock* ./
 
-EXPOSE 3000
-CMD ["node", "server.js"]
+# Install deps (use the lockfile you have)
+RUN if [ -f yarn.lock ]; then \
+      corepack enable && yarn install --frozen-lockfile; \
+    elif [ -f pnpm-lock.yaml ]; then \
+      corepack enable && pnpm install --frozen-lockfile; \
+    elif [ -f package-lock.json ]; then \
+      npm ci; \
+    else \
+      npm install; \
+    fi
+
+# Copy the rest
+COPY . .
+
+# If you have a build step (Next.js etc.)
+# RUN npm run build
+
+EXPOSE 8080
+
+# Change to your actual start command
+CMD ["npm", "run", "start"]
