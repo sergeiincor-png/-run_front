@@ -1,7 +1,0 @@
-[README.md](https://github.com/user-attachments/files/24393930/README.md)
-[vite.config.ts](https://github.com/user-attachments/files/24393931/vite.config.ts)[metadata.json](https://github.com/user-attachments/files/24393937/metadata.json)
-[App.tsx](https://github.com/user-attachments/files/24393936/App.tsx)
-[package.json](https://github.com/user-attachments/files/24393935/package.json)
-[index.html](https://github.com/user-attachments/files/24393934/index.html)
-[index.tsx](https://github.com/user-attachments/files/24393933/index.tsx)
-[tsconfig.json](https://github.com/user-attachments/files/24393932/tsconfig.json)
