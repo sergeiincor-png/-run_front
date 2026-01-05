@@ -7,12 +7,12 @@ import {
   LogOut, 
   Bell, 
   Search,
-  Dumbbell,     // Иконка для базы упражнений
-  Plus,         // Иконка плюса
-  Play,         // Иконка Play
-  ExternalLink, // Иконка ссылки
-  X,            // Закрыть модалку
-  Save          // Сохранить
+  Dumbbell,     
+  Plus,         
+  Play,         
+  ExternalLink, 
+  X,            
+  Save          
 } from 'lucide-react';
 import CalendarView from './CalendarView';
 
@@ -26,8 +26,8 @@ interface Exercise {
   title: string;
   category: string;
   description: string;
-  videoUrl: string;
-  imageUrl?: string; // Опционально, если захотим картинку
+  videoUrl: string; // Ссылка на видео
+  embedUrl?: string; // Ссылка для плеера (iframe)
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ user }) => {
@@ -37,44 +37,48 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
   const [isExerciseModalOpen, setIsExerciseModalOpen] = useState(false);
   const [newExercise, setNewExercise] = useState<Partial<Exercise>>({ title: '', category: 'СБУ', description: '', videoUrl: '' });
   
-  // Mock-данные упражнений (Пример)
+  // --- БАЗА УПРАЖНЕНИЙ ---
+  // Оставили только одну реальную запись с RuTube
   const [exercises, setExercises] = useState<Exercise[]>([
     { 
       id: '1', 
       title: 'СБУ: Бег с высоким подниманием бедра', 
-      category: 'Техника бега', 
-      description: 'Базовое упражнение для развития мышц сгибателей бедра и улучшения каденса. Корпус держим ровно, не заваливаемся назад.', 
-      videoUrl: 'https://rutube.ru/video/example1' 
-    },
-    { 
-      id: '2', 
-      title: 'Комплекс ОФП для бегуна (Ноги)', 
-      category: 'Силовая', 
-      description: 'Выпады, приседания и зашагивания на тумбу. Выполнять 2 раза в неделю.', 
-      videoUrl: 'https://vk.com/video/example2' 
-    },
-    { 
-      id: '3', 
-      title: 'Растяжка после длительной', 
-      category: 'Восстановление', 
-      description: 'Мягкая статика для задней поверхности бедра и икроножных мышц. Не делать рывков!', 
-      videoUrl: 'https://rutube.ru/video/example3' 
-    },
+      category: 'СБУ', 
+      description: 'Ключевое упражнение для отработки правильного выноса бедра и постановки стопы под центр тяжести. Развивает силу мышц-сгибателей, улучшает межмышечную координацию и повышает каденс. Важно: держите корпус вертикально, не отклоняйтесь назад, активно работайте руками, как при беге.', 
+      videoUrl: 'https://rutube.ru/video/d20386334ae35d8bb2ade76fbdcd0b25/',
+      embedUrl: 'https://rutube.ru/play/embed/d20386334ae35d8bb2ade76fbdcd0b25' // Специальная ссылка для плеера
+    }
   ]);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
   };
 
+  // Хелпер для превращения ссылок RuTube в Embed (для будущих видео)
+  const getEmbedUrl = (url: string) => {
+    // Простая логика: если это рутуб, пытаемся достать ID и сделать embed
+    if (url.includes('rutube.ru')) {
+        // Извлекаем ID из ссылки вида rutube.ru/video/ID/
+        const match = url.match(/\/video\/([a-zA-Z0-9]+)/);
+        if (match && match[1]) {
+            return `https://rutube.ru/play/embed/${match[1]}`;
+        }
+    }
+    return url; // Если не распознали, возвращаем как есть
+  };
+
   const saveExercise = () => {
     if (!newExercise.title || !newExercise.videoUrl) return;
+    
+    const embed = getEmbedUrl(newExercise.videoUrl);
+
     const item: Exercise = {
       id: crypto.randomUUID(),
       title: newExercise.title!,
       category: newExercise.category || 'Разное',
       description: newExercise.description || '',
       videoUrl: newExercise.videoUrl!,
-      imageUrl: 'https://images.unsplash.com/photo-1571019614242-c5c5dee9f50b?auto=format&fit=crop&q=80&w=500' // Заглушка
+      embedUrl: embed 
     };
     setExercises([...exercises, item]);
     setIsExerciseModalOpen(false);
@@ -83,7 +87,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
 
   const navItems = [
     { id: 'calendar', icon: <CalendarIcon size={24} />, label: 'Календарь' },
-    // НОВЫЙ ПУНКТ МЕНЮ
     { id: 'exercises', icon: <Dumbbell size={24} />, label: 'База упражнений' }, 
     { id: 'analytics', icon: <BarChart3 size={24} />, label: 'Аналитика' },
     { id: 'settings', icon: <Settings size={24} />, label: 'Настройки' },
@@ -92,7 +95,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
   return (
     <div className="flex h-screen bg-[#09090b] text-slate-200 overflow-hidden font-sans">
       
-      {/* --- SIDEBAR (Левая панель) --- */}
+      {/* --- SIDEBAR --- */}
       <aside className="w-20 md:w-24 border-r border-white/5 flex flex-col items-center py-10 gap-10 bg-black/20 backdrop-blur-xl z-50">
         <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center font-bold italic text-white shadow-lg shadow-blue-600/20">RC</div>
         
@@ -106,7 +109,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
               }`}
             >
               {item.icon}
-              {/* Тултип при наведении */}
               <span className="absolute left-full ml-4 px-3 py-1 bg-zinc-800 text-white text-[10px] font-bold uppercase rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-[70] border border-white/10 shadow-xl">
                 {item.label}
               </span>
@@ -119,7 +121,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
         </button>
       </aside>
 
-      {/* --- MAIN CONTENT (Основная часть) --- */}
+      {/* --- MAIN CONTENT --- */}
       <div className="flex-grow flex flex-col overflow-hidden relative">
         
         {/* HEADER */}
@@ -160,7 +162,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
           {/* 1. КАЛЕНДАРЬ */}
           {activeTab === 'calendar' && <CalendarView />}
 
-          {/* 2. БАЗА УПРАЖНЕНИЙ (Новый раздел) */}
+          {/* 2. БАЗА УПРАЖНЕНИЙ */}
           {activeTab === 'exercises' && (
             <div className="max-w-7xl mx-auto animate-in fade-in duration-500">
               
@@ -181,16 +183,27 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
               {/* Сетка карточек */}
               <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {exercises.map((ex) => (
-                  <div key={ex.id} className="group bg-white/5 border border-white/5 hover:border-blue-500/30 rounded-[2rem] overflow-hidden transition-all hover:bg-white/[0.07] flex flex-col">
+                  <div key={ex.id} className="group bg-white/5 border border-white/5 hover:border-blue-500/30 rounded-[2rem] overflow-hidden transition-all hover:bg-white/[0.07] flex flex-col shadow-lg">
                     
-                    {/* Имитация превью видео */}
-                    <div className="aspect-video bg-black/40 relative flex items-center justify-center overflow-hidden">
-                       {/* Если бы была реальная картинка: <img src={ex.imageUrl} ... /> */}
-                       <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent z-10" />
-                       <div className="w-16 h-16 rounded-full bg-white/10 backdrop-blur-sm flex items-center justify-center group-hover:scale-110 transition-transform z-20 border border-white/20">
-                          <Play size={24} className="ml-1 text-white fill-white" />
-                       </div>
-                       <span className="absolute top-4 left-4 px-3 py-1 bg-black/50 backdrop-blur-md rounded-full text-[10px] font-bold uppercase tracking-widest text-slate-300 z-20 border border-white/10">
+                    {/* ПЛЕЕР ВИДЕО (IFRAME) */}
+                    <div className="aspect-video bg-black relative flex items-center justify-center overflow-hidden">
+                       {ex.embedUrl ? (
+                         <iframe 
+                           src={ex.embedUrl} 
+                           className="w-full h-full absolute inset-0" 
+                           allow="clipboard-write; autoplay" 
+                           allowFullScreen 
+                           title={ex.title}
+                         />
+                       ) : (
+                         // Фолбек, если видео не распознано
+                         <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent flex items-center justify-center">
+                            <Play size={32} className="text-white opacity-50" />
+                         </div>
+                       )}
+                       
+                       {/* Бейдж категории */}
+                       <span className="absolute top-4 left-4 px-3 py-1 bg-black/60 backdrop-blur-md rounded-full text-[10px] font-bold uppercase tracking-widest text-slate-300 z-20 border border-white/10 pointer-events-none">
                          {ex.category}
                        </span>
                     </div>
@@ -199,18 +212,18 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                       <h3 className="text-xl font-bold text-white mb-3 leading-tight group-hover:text-blue-400 transition-colors">
                         {ex.title}
                       </h3>
-                      <p className="text-slate-400 text-sm leading-relaxed mb-6 line-clamp-3">
+                      <p className="text-slate-400 text-sm leading-relaxed mb-6 line-clamp-4">
                         {ex.description}
                       </p>
                       
-                      <div className="mt-auto">
+                      <div className="mt-auto pt-4 border-t border-white/5">
                         <a 
                           href={ex.videoUrl} 
                           target="_blank" 
                           rel="noopener noreferrer"
-                          className="inline-flex items-center gap-2 text-blue-500 text-xs font-bold uppercase tracking-widest hover:text-blue-400 transition-colors"
+                          className="inline-flex items-center gap-2 text-slate-500 text-xs font-bold uppercase tracking-widest hover:text-white transition-colors"
                         >
-                          Смотреть видео <ExternalLink size={14} />
+                          Открыть оригинал <ExternalLink size={14} />
                         </a>
                       </div>
                     </div>
@@ -223,13 +236,8 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
           {/* 3. АНАЛИТИКА (Заглушка) */}
           {activeTab === 'analytics' && (
             <div className="flex flex-col items-center justify-center h-full text-slate-500 gap-6 opacity-50">
-               <div className="w-24 h-24 rounded-full bg-white/5 flex items-center justify-center">
-                  <BarChart3 size={48} />
-               </div>
-               <div className="text-center">
-                 <p className="font-bold text-white text-xl mb-2">Модуль аналитики</p>
-                 <p className="text-sm uppercase tracking-widest">В разработке для версии 2.0</p>
-               </div>
+               <BarChart3 size={48} />
+               <div className="text-center"><p className="font-bold text-white text-xl mb-2">Модуль аналитики</p><p className="text-sm uppercase tracking-widest">В разработке</p></div>
             </div>
           )}
 
@@ -239,104 +247,52 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                <h2 className="text-2xl font-bold mb-10 text-white">Настройки профиля</h2>
                <div className="space-y-6">
                   <div className="p-4 bg-white/5 rounded-2xl flex justify-between items-center hover:bg-white/10 transition-colors cursor-pointer">
-                     <div>
-                        <p className="text-sm font-bold text-white">Интеграция Garmin</p>
-                        <p className="text-xs text-slate-500">Автосинхронизация тренировок</p>
-                     </div>
+                     <div><p className="text-sm font-bold text-white">Интеграция Garmin</p><p className="text-xs text-slate-500">Автосинхронизация тренировок</p></div>
                      <button className="text-blue-500 text-xs font-bold uppercase tracking-widest">Подключить</button>
                   </div>
                   <div className="p-4 bg-white/5 rounded-2xl flex justify-between items-center hover:bg-white/10 transition-colors cursor-pointer">
-                     <div>
-                        <p className="text-sm font-bold text-white">Уведомления AI</p>
-                        <p className="text-xs text-slate-500">Отправлять отчеты в Telegram</p>
-                     </div>
-                     <div className="w-10 h-6 bg-blue-600 rounded-full flex items-center px-1">
-                        <div className="w-4 h-4 bg-white rounded-full ml-auto" />
-                     </div>
+                     <div><p className="text-sm font-bold text-white">Уведомления AI</p><p className="text-xs text-slate-500">Отправлять отчеты в Telegram</p></div>
+                     <div className="w-10 h-6 bg-blue-600 rounded-full flex items-center px-1"><div className="w-4 h-4 bg-white rounded-full ml-auto" /></div>
                   </div>
                </div>
             </div>
           )}
         </main>
 
-        {/* --- МОДАЛЬНОЕ ОКНО ДЛЯ ДОБАВЛЕНИЯ УПРАЖНЕНИЯ --- */}
+        {/* --- МОДАЛЬНОЕ ОКНО --- */}
         {isExerciseModalOpen && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
             <div className="bg-[#18181b] w-full max-w-lg rounded-3xl shadow-2xl border border-white/10 overflow-hidden flex flex-col">
-              
               <div className="px-6 py-5 border-b border-white/5 flex justify-between items-center bg-[#202023]">
                 <h3 className="text-lg font-bold text-white">Добавить упражнение</h3>
-                <button onClick={() => setIsExerciseModalOpen(false)} className="text-slate-400 hover:text-white transition-colors">
-                  <X size={24} />
-                </button>
+                <button onClick={() => setIsExerciseModalOpen(false)} className="text-slate-400 hover:text-white transition-colors"><X size={24} /></button>
               </div>
 
               <div className="p-6 space-y-5">
                 <div className="space-y-2">
                   <label className="text-[10px] uppercase font-bold text-slate-500 tracking-widest">Название</label>
-                  <input 
-                    type="text" 
-                    value={newExercise.title}
-                    onChange={e => setNewExercise({...newExercise, title: e.target.value})}
-                    placeholder="Например: СБУ Бег на прямых ногах"
-                    className="w-full bg-black/20 border border-white/10 rounded-xl p-3 text-white focus:border-blue-500 outline-none font-bold"
-                  />
+                  <input type="text" value={newExercise.title} onChange={e => setNewExercise({...newExercise, title: e.target.value})} placeholder="Название упражнения" className="w-full bg-black/20 border border-white/10 rounded-xl p-3 text-white focus:border-blue-500 outline-none font-bold" />
                 </div>
-
                 <div className="space-y-2">
                   <label className="text-[10px] uppercase font-bold text-slate-500 tracking-widest">Категория</label>
-                  <select 
-                    value={newExercise.category}
-                    onChange={e => setNewExercise({...newExercise, category: e.target.value})}
-                    className="w-full bg-black/20 border border-white/10 rounded-xl p-3 text-white focus:border-blue-500 outline-none appearance-none font-medium"
-                  >
-                    <option>СБУ</option>
-                    <option>Силовая</option>
-                    <option>Растяжка</option>
-                    <option>Техника</option>
-                    <option>Разное</option>
+                  <select value={newExercise.category} onChange={e => setNewExercise({...newExercise, category: e.target.value})} className="w-full bg-black/20 border border-white/10 rounded-xl p-3 text-white focus:border-blue-500 outline-none appearance-none font-medium">
+                    <option>СБУ</option><option>Силовая</option><option>Растяжка</option><option>Техника</option><option>Разное</option>
                   </select>
                 </div>
-
                 <div className="space-y-2">
-                  <label className="text-[10px] uppercase font-bold text-slate-500 tracking-widest">Ссылка на видео (VK / Rutube)</label>
-                  <input 
-                    type="text" 
-                    value={newExercise.videoUrl}
-                    onChange={e => setNewExercise({...newExercise, videoUrl: e.target.value})}
-                    placeholder="https://vk.com/video..."
-                    className="w-full bg-black/20 border border-white/10 rounded-xl p-3 text-white focus:border-blue-500 outline-none font-mono text-sm"
-                  />
+                  <label className="text-[10px] uppercase font-bold text-slate-500 tracking-widest">Ссылка на видео (Rutube / VK)</label>
+                  <input type="text" value={newExercise.videoUrl} onChange={e => setNewExercise({...newExercise, videoUrl: e.target.value})} placeholder="https://rutube.ru/video/..." className="w-full bg-black/20 border border-white/10 rounded-xl p-3 text-white focus:border-blue-500 outline-none font-mono text-sm" />
                 </div>
-
                 <div className="space-y-2">
                   <label className="text-[10px] uppercase font-bold text-slate-500 tracking-widest">Описание</label>
-                  <textarea 
-                    rows={4} 
-                    value={newExercise.description}
-                    onChange={e => setNewExercise({...newExercise, description: e.target.value})}
-                    placeholder="Кратко о технике выполнения..."
-                    className="w-full bg-black/20 border border-white/10 rounded-xl p-3 text-white focus:border-blue-500 outline-none resize-none text-sm leading-relaxed"
-                  />
+                  <textarea rows={4} value={newExercise.description} onChange={e => setNewExercise({...newExercise, description: e.target.value})} placeholder="Техника выполнения..." className="w-full bg-black/20 border border-white/10 rounded-xl p-3 text-white focus:border-blue-500 outline-none resize-none text-sm leading-relaxed" />
                 </div>
               </div>
 
               <div className="p-6 border-t border-white/5 bg-[#202023] flex justify-end gap-3">
-                 <button 
-                   onClick={() => setIsExerciseModalOpen(false)}
-                   className="px-6 py-3 rounded-xl font-bold text-slate-400 hover:bg-white/5 transition-colors"
-                 >
-                   Отмена
-                 </button>
-                 <button 
-                   onClick={saveExercise}
-                   className="px-8 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold shadow-lg shadow-blue-600/20 flex items-center gap-2 transition-all active:scale-95"
-                 >
-                   <Save size={18} />
-                   Сохранить
-                 </button>
+                 <button onClick={() => setIsExerciseModalOpen(false)} className="px-6 py-3 rounded-xl font-bold text-slate-400 hover:bg-white/5 transition-colors">Отмена</button>
+                 <button onClick={saveExercise} className="px-8 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold shadow-lg shadow-blue-600/20 flex items-center gap-2 transition-all active:scale-95"><Save size={18} /> Сохранить</button>
               </div>
-
             </div>
           </div>
         )}
