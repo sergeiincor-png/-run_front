@@ -1,26 +1,26 @@
 import React, { useState } from 'react';
-import { ChevronLeft, ChevronRight, CheckCircle2, Clock, X, Save, Trash2, Activity, Timer, Hash } from 'lucide-react';
+import { ChevronLeft, ChevronRight, CheckCircle2, Clock, X, Save, Trash2, Activity, Timer, Hash, Trophy } from 'lucide-react';
 
 // --- Типы данных ---
 interface Workout {
   id: string;
-  day: number; // День месяца
-  month: number; // Месяц (0-11)
+  day: number;
+  month: number;
   year: number;
   type: 'run' | 'strength' | 'rest' | 'cross';
   title: string;
   status: 'completed' | 'missed' | 'planned';
-  distance?: string; // км
-  duration?: string; // чч:мм:сс
-  pace?: string; // мин/км
-  hr?: string; // уд/мин
+  distance?: string;
+  duration?: string;
+  pace?: string;
+  hr?: string;
   description?: string;
 }
 
 const CalendarView: React.FC = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
   
-  // Состояние для хранения тренировок (чтобы их можно было менять и двигать)
+  // Данные тренировок
   const [workouts, setWorkouts] = useState<Workout[]>([
     { id: '1', day: 5, month: 0, year: 2026, type: 'run', title: 'Легкий бег 5 км', status: 'completed', distance: '5.0', pace: '6:30', hr: '135', description: 'Легко, в разговорном темпе' },
     { id: '2', day: 8, month: 0, year: 2026, type: 'strength', title: 'ОФП (Ноги)', status: 'completed', duration: '00:45:00', description: 'Приседания, выпады, планка' },
@@ -29,14 +29,11 @@ const CalendarView: React.FC = () => {
     { id: '5', day: 16, month: 0, year: 2026, type: 'rest', title: 'Отдых', status: 'planned' },
   ]);
 
-  // Состояние для Drag-and-Drop
   const [draggedWorkoutId, setDraggedWorkoutId] = useState<string | null>(null);
-
-  // Состояние для Модального окна
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingWorkout, setEditingWorkout] = useState<Partial<Workout> | null>(null);
 
-  // --- Хелперы для календаря ---
+  // Хелперы
   const getDaysInMonth = (date: Date) => new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
   const getFirstDayOfMonth = (date: Date) => {
     let day = new Date(date.getFullYear(), date.getMonth(), 1).getDay();
@@ -54,22 +51,20 @@ const CalendarView: React.FC = () => {
   const today = new Date();
   const isCurrentMonth = today.getMonth() === currentDate.getMonth() && today.getFullYear() === currentDate.getFullYear();
 
-  // --- Логика Drag-and-Drop ---
+  // Drag-and-Drop
   const handleDragStart = (e: React.DragEvent, id: string) => {
     setDraggedWorkoutId(id);
     e.dataTransfer.effectAllowed = 'move';
   };
 
   const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault(); // Разрешаем сброс (Drop) в эту зону
+    e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
   };
 
   const handleDrop = (e: React.DragEvent, targetDay: number) => {
     e.preventDefault();
     if (!draggedWorkoutId) return;
-
-    // Обновляем день у перетаскиваемой тренировки
     setWorkouts(prev => prev.map(w => {
       if (w.id === draggedWorkoutId) {
         return { ...w, day: targetDay, month: currentDate.getMonth(), year: currentDate.getFullYear() };
@@ -79,20 +74,13 @@ const CalendarView: React.FC = () => {
     setDraggedWorkoutId(null);
   };
 
-  // --- Логика Модального окна ---
+  // Модальное окно
   const openNewWorkoutModal = (day: number) => {
     setEditingWorkout({
       id: crypto.randomUUID(),
-      day,
-      month: currentDate.getMonth(),
-      year: currentDate.getFullYear(),
-      type: 'run',
-      status: 'planned',
-      title: '',
-      distance: '',
-      pace: '',
-      hr: '',
-      description: ''
+      day, month: currentDate.getMonth(), year: currentDate.getFullYear(),
+      type: 'run', status: 'planned', title: '',
+      distance: '', pace: '', hr: '', description: ''
     });
     setIsModalOpen(true);
   };
@@ -103,19 +91,15 @@ const CalendarView: React.FC = () => {
   };
 
   const saveWorkout = () => {
-    if (!editingWorkout || !editingWorkout.title) return; // Валидация: заголовок обязателен
-
+    if (!editingWorkout || !editingWorkout.title) return;
     setWorkouts(prev => {
-      const existingIndex = prev.findIndex(w => w.id === editingWorkout.id);
-      if (existingIndex >= 0) {
-        // Обновляем существующую
+      const idx = prev.findIndex(w => w.id === editingWorkout.id);
+      if (idx >= 0) {
         const updated = [...prev];
-        updated[existingIndex] = editingWorkout as Workout;
+        updated[idx] = editingWorkout as Workout;
         return updated;
-      } else {
-        // Создаем новую
-        return [...prev, editingWorkout as Workout];
       }
+      return [...prev, editingWorkout as Workout];
     });
     setIsModalOpen(false);
   };
@@ -128,27 +112,58 @@ const CalendarView: React.FC = () => {
 
   return (
     <div className="flex flex-col gap-8 pb-10 relative">
-      {/* Шапка календаря */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      {/* --- ШАПКА КАЛЕНДАРЯ --- */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+        
+        {/* Левая часть: Месяц и навигация */}
         <div className="flex items-center gap-4">
           <h2 className="text-3xl font-bold text-white tracking-tight">
             {monthNames[currentDate.getMonth()]} <span className="text-slate-500">{currentDate.getFullYear()}</span>
           </h2>
           <div className="flex gap-2">
-            <button onClick={prevMonth} className="w-10 h-10 rounded-xl bg-white/5 hover:bg-white/10 flex items-center justify-center text-slate-400 hover:text-white border border-white/5"><ChevronLeft size={20} /></button>
-            <button onClick={nextMonth} className="w-10 h-10 rounded-xl bg-white/5 hover:bg-white/10 flex items-center justify-center text-slate-400 hover:text-white border border-white/5"><ChevronRight size={20} /></button>
+            <button onClick={prevMonth} className="w-10 h-10 rounded-xl bg-white/5 hover:bg-white/10 flex items-center justify-center text-slate-400 hover:text-white border border-white/5 transition-colors"><ChevronLeft size={20} /></button>
+            <button onClick={nextMonth} className="w-10 h-10 rounded-xl bg-white/5 hover:bg-white/10 flex items-center justify-center text-slate-400 hover:text-white border border-white/5 transition-colors"><ChevronRight size={20} /></button>
           </div>
         </div>
-        <div className="flex gap-6 p-4 md:p-0 bg-white/5 md:bg-transparent rounded-2xl md:rounded-none">
-            <div className="text-left md:text-right">
-                <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">План (км)</p>
-                <p className="text-xl font-bold text-white">42.5</p>
+
+        {/* Правая часть: КРАСИВЫЙ БЛОК "МОЯ ЦЕЛЬ" */}
+        <div className="flex items-center gap-5 bg-gradient-to-br from-white/10 to-white/[0.02] border border-white/10 rounded-2xl p-4 backdrop-blur-md shadow-lg">
+          
+          {/* Иконка кубка */}
+          <div className="h-12 w-12 rounded-xl bg-blue-500/20 flex items-center justify-center text-blue-400 border border-blue-500/20 shadow-[0_0_15px_rgba(59,130,246,0.2)]">
+            <Trophy size={24} />
+          </div>
+          
+          {/* Текст цели */}
+          <div>
+            <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5 flex items-center gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"/> 
+              Моя цель
+            </p>
+            
+            <div className="flex items-center gap-6">
+               <div>
+                  <p className="text-[10px] text-slate-500 font-bold uppercase mb-0.5">Дата</p>
+                  <p className="font-bold text-white text-sm">15 Мая</p>
+               </div>
+               <div className="w-px h-8 bg-white/10" />
+               <div>
+                  <p className="text-[10px] text-slate-500 font-bold uppercase mb-0.5">Дист.</p>
+                  <p className="font-bold text-white text-sm">21.1 км</p>
+               </div>
+               <div className="w-px h-8 bg-white/10" />
+               <div>
+                  <p className="text-[10px] text-slate-500 font-bold uppercase mb-0.5">Время</p>
+                  <p className="font-bold text-white text-sm">1:59:00</p>
+               </div>
             </div>
+          </div>
         </div>
+
       </div>
 
-      {/* Сетка календаря */}
-      <div className="bg-white/5 rounded-[2rem] p-4 md:p-6 border border-white/5 flex flex-col">
+      {/* --- СЕТКА --- */}
+      <div className="bg-white/5 rounded-[2rem] p-4 md:p-6 border border-white/5 flex flex-col shadow-2xl">
         <div className="grid grid-cols-7 mb-4">
           {['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'].map(day => (
             <div key={day} className="text-center text-[10px] md:text-sm font-bold text-slate-500 uppercase tracking-wider py-2">{day}</div>
@@ -160,12 +175,7 @@ const CalendarView: React.FC = () => {
 
           {Array.from({ length: daysInMonth }).map((_, i) => {
             const dayNum = i + 1;
-            // Фильтруем тренировки для этого дня
-            const dayWorkouts = workouts.filter(w => 
-              w.day === dayNum && 
-              w.month === currentDate.getMonth() && 
-              w.year === currentDate.getFullYear()
-            );
+            const dayWorkouts = workouts.filter(w => w.day === dayNum && w.month === currentDate.getMonth() && w.year === currentDate.getFullYear());
             const isToday = isCurrentMonth && dayNum === today.getDate();
 
             return (
@@ -173,12 +183,9 @@ const CalendarView: React.FC = () => {
                 key={dayNum}
                 onDragOver={handleDragOver}
                 onDrop={(e) => handleDrop(e, dayNum)}
-                onClick={(e) => {
-                   // Если клик был не по тренировке, открываем создание новой
-                   if (e.target === e.currentTarget) openNewWorkoutModal(dayNum);
-                }}
+                onClick={(e) => { if (e.target === e.currentTarget) openNewWorkoutModal(dayNum); }}
                 className={`relative rounded-2xl p-2 md:p-3 flex flex-col gap-2 transition-all group border min-h-[100px] md:min-h-0 cursor-pointer
-                  ${isToday ? 'bg-blue-600/10 border-blue-500' : 'bg-white/5 border-transparent hover:bg-white/10 hover:border-white/10'}
+                  ${isToday ? 'bg-blue-600/10 border-blue-500 shadow-[0_0_20px_rgba(37,99,235,0.15)]' : 'bg-white/5 border-transparent hover:bg-white/10 hover:border-white/10'}
                 `}
               >
                 <div className="flex justify-between items-start pointer-events-none">
@@ -208,8 +215,7 @@ const CalendarView: React.FC = () => {
                     {workout.distance && <p className="text-[10px] text-slate-400 mt-1">{workout.distance} км</p>}
                   </div>
                 ))}
-
-                {/* Кнопка добавления при наведении */}
+                
                 <div className="mt-auto pt-4 opacity-0 group-hover:opacity-100 transition-opacity hidden md:block">
                     <button 
                       onClick={(e) => { e.stopPropagation(); openNewWorkoutModal(dayNum); }}
@@ -224,158 +230,61 @@ const CalendarView: React.FC = () => {
         </div>
       </div>
 
-      {/* --- МОДАЛЬНОЕ ОКНО (TrainingPeaks Style) --- */}
+      {/* --- МОДАЛЬНОЕ ОКНО --- */}
       {isModalOpen && editingWorkout && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-[#18181b] w-full max-w-2xl rounded-3xl shadow-2xl border border-white/10 overflow-hidden flex flex-col max-h-[90vh]">
-            
-            {/* Header */}
             <div className="px-6 py-4 border-b border-white/5 flex justify-between items-center bg-[#202023]">
               <div>
-                <h3 className="text-lg font-bold text-white">
-                  {editingWorkout.id && workouts.find(w => w.id === editingWorkout.id) ? 'Редактировать тренировку' : 'Новая тренировка'}
-                </h3>
-                <p className="text-xs text-slate-400 uppercase font-bold tracking-widest">
-                  {editingWorkout.day} {monthNames[editingWorkout.month!]} {editingWorkout.year}
-                </p>
+                <h3 className="text-lg font-bold text-white">{editingWorkout.id && workouts.find(w => w.id === editingWorkout.id) ? 'Редактировать' : 'Новая тренировка'}</h3>
+                <p className="text-xs text-slate-400 uppercase font-bold tracking-widest">{editingWorkout.day} {monthNames[editingWorkout.month!]} {editingWorkout.year}</p>
               </div>
-              <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-white transition-colors">
-                <X size={24} />
-              </button>
+              <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-white transition-colors"><X size={24} /></button>
             </div>
-
-            {/* Body */}
             <div className="p-6 overflow-y-auto custom-scrollbar space-y-6">
-              
-              {/* Title & Type */}
               <div className="grid grid-cols-3 gap-4">
                  <div className="col-span-2 space-y-2">
                     <label className="text-[10px] uppercase font-bold text-slate-500 tracking-widest">Название</label>
-                    <input 
-                      type="text" 
-                      value={editingWorkout.title}
-                      onChange={e => setEditingWorkout({...editingWorkout, title: e.target.value})}
-                      placeholder="Например: Легкий бег 5км"
-                      className="w-full bg-black/20 border border-white/10 rounded-xl p-3 text-white focus:border-blue-500 outline-none transition-colors font-bold text-lg"
-                    />
+                    <input type="text" value={editingWorkout.title} onChange={e => setEditingWorkout({...editingWorkout, title: e.target.value})} placeholder="Например: Легкий бег 5км" className="w-full bg-black/20 border border-white/10 rounded-xl p-3 text-white focus:border-blue-500 outline-none font-bold text-lg" />
                  </div>
                  <div className="space-y-2">
                     <label className="text-[10px] uppercase font-bold text-slate-500 tracking-widest">Тип</label>
-                    <select 
-                      value={editingWorkout.type}
-                      onChange={e => setEditingWorkout({...editingWorkout, type: e.target.value as any})}
-                      className="w-full bg-black/20 border border-white/10 rounded-xl p-3 text-white focus:border-blue-500 outline-none appearance-none"
-                    >
-                      <option value="run">Бег</option>
-                      <option value="strength">Силовая</option>
-                      <option value="cross">Кросс-тренинг</option>
-                      <option value="rest">Отдых</option>
+                    <select value={editingWorkout.type} onChange={e => setEditingWorkout({...editingWorkout, type: e.target.value as any})} className="w-full bg-black/20 border border-white/10 rounded-xl p-3 text-white focus:border-blue-500 outline-none appearance-none">
+                      <option value="run">Бег</option><option value="strength">Силовая</option><option value="cross">Кросс</option><option value="rest">Отдых</option>
                     </select>
                  </div>
               </div>
-
-              {/* Metrics Grid */}
               <div className="grid grid-cols-3 gap-4 p-4 bg-white/5 rounded-2xl border border-white/5">
                  <div className="space-y-2">
-                    <div className="flex items-center gap-2 text-slate-400 mb-1">
-                       <Hash size={14} />
-                       <span className="text-[10px] uppercase font-bold tracking-widest">Дистанция (км)</span>
-                    </div>
-                    <input 
-                      type="number" 
-                      value={editingWorkout.distance || ''}
-                      onChange={e => setEditingWorkout({...editingWorkout, distance: e.target.value})}
-                      placeholder="0.0"
-                      className="w-full bg-transparent border-b border-white/20 py-1 text-xl font-mono text-white focus:border-blue-500 outline-none placeholder:text-slate-700"
-                    />
+                    <div className="flex items-center gap-2 text-slate-400 mb-1"><Hash size={14} /><span className="text-[10px] uppercase font-bold tracking-widest">Дист. (км)</span></div>
+                    <input type="number" value={editingWorkout.distance || ''} onChange={e => setEditingWorkout({...editingWorkout, distance: e.target.value})} placeholder="0.0" className="w-full bg-transparent border-b border-white/20 py-1 text-xl font-mono text-white focus:border-blue-500 outline-none" />
                  </div>
                  <div className="space-y-2">
-                    <div className="flex items-center gap-2 text-slate-400 mb-1">
-                       <Timer size={14} />
-                       <span className="text-[10px] uppercase font-bold tracking-widest">Темп (мин/км)</span>
-                    </div>
-                    <input 
-                      type="text" 
-                      value={editingWorkout.pace || ''}
-                      onChange={e => setEditingWorkout({...editingWorkout, pace: e.target.value})}
-                      placeholder="--:--"
-                      className="w-full bg-transparent border-b border-white/20 py-1 text-xl font-mono text-white focus:border-blue-500 outline-none placeholder:text-slate-700"
-                    />
+                    <div className="flex items-center gap-2 text-slate-400 mb-1"><Timer size={14} /><span className="text-[10px] uppercase font-bold tracking-widest">Темп</span></div>
+                    <input type="text" value={editingWorkout.pace || ''} onChange={e => setEditingWorkout({...editingWorkout, pace: e.target.value})} placeholder="--:--" className="w-full bg-transparent border-b border-white/20 py-1 text-xl font-mono text-white focus:border-blue-500 outline-none" />
                  </div>
                  <div className="space-y-2">
-                    <div className="flex items-center gap-2 text-slate-400 mb-1">
-                       <Activity size={14} />
-                       <span className="text-[10px] uppercase font-bold tracking-widest">ЧСС (уд/мин)</span>
-                    </div>
-                    <input 
-                      type="number" 
-                      value={editingWorkout.hr || ''}
-                      onChange={e => setEditingWorkout({...editingWorkout, hr: e.target.value})}
-                      placeholder="---"
-                      className="w-full bg-transparent border-b border-white/20 py-1 text-xl font-mono text-white focus:border-blue-500 outline-none placeholder:text-slate-700"
-                    />
+                    <div className="flex items-center gap-2 text-slate-400 mb-1"><Activity size={14} /><span className="text-[10px] uppercase font-bold tracking-widest">ЧСС</span></div>
+                    <input type="number" value={editingWorkout.hr || ''} onChange={e => setEditingWorkout({...editingWorkout, hr: e.target.value})} placeholder="---" className="w-full bg-transparent border-b border-white/20 py-1 text-xl font-mono text-white focus:border-blue-500 outline-none" />
                  </div>
               </div>
-
-              {/* Description */}
               <div className="space-y-2">
-                 <label className="text-[10px] uppercase font-bold text-slate-500 tracking-widest">Задание тренера / Описание</label>
-                 <textarea 
-                   rows={6}
-                   value={editingWorkout.description || ''}
-                   onChange={e => setEditingWorkout({...editingWorkout, description: e.target.value})}
-                   placeholder="Разминка 2 км, затем СБУ..."
-                   className="w-full bg-black/20 border border-white/10 rounded-xl p-4 text-sm text-slate-300 focus:border-blue-500 outline-none resize-none leading-relaxed"
-                 />
+                 <label className="text-[10px] uppercase font-bold text-slate-500 tracking-widest">Описание</label>
+                 <textarea rows={4} value={editingWorkout.description || ''} onChange={e => setEditingWorkout({...editingWorkout, description: e.target.value})} placeholder="Детали тренировки..." className="w-full bg-black/20 border border-white/10 rounded-xl p-4 text-sm text-slate-300 focus:border-blue-500 outline-none resize-none" />
               </div>
-
-              {/* Status Toggles */}
               <div className="flex gap-4">
                 {['planned', 'completed', 'missed'].map((status) => (
-                  <button
-                    key={status}
-                    onClick={() => setEditingWorkout({...editingWorkout, status: status as any})}
-                    className={`flex-1 py-2 rounded-lg text-xs font-bold uppercase tracking-widest border transition-all ${
-                      editingWorkout.status === status 
-                        ? (status === 'completed' ? 'bg-green-500/20 border-green-500 text-green-400' : 
-                           status === 'missed' ? 'bg-red-500/20 border-red-500 text-red-400' : 
-                           'bg-blue-500/20 border-blue-500 text-blue-400')
-                        : 'border-white/10 text-slate-500 hover:bg-white/5'
-                    }`}
-                  >
-                    {status === 'planned' ? 'План' : status === 'completed' ? 'Выполнено' : 'Пропуск'}
-                  </button>
+                  <button key={status} onClick={() => setEditingWorkout({...editingWorkout, status: status as any})} className={`flex-1 py-2 rounded-lg text-xs font-bold uppercase tracking-widest border transition-all ${editingWorkout.status === status ? (status === 'completed' ? 'bg-green-500/20 border-green-500 text-green-400' : status === 'missed' ? 'bg-red-500/20 border-red-500 text-red-400' : 'bg-blue-500/20 border-blue-500 text-blue-400') : 'border-white/10 text-slate-500 hover:bg-white/5'}`}>{status === 'planned' ? 'План' : status === 'completed' ? 'Выполнено' : 'Пропуск'}</button>
                 ))}
               </div>
-
             </div>
-
-            {/* Footer */}
             <div className="p-6 border-t border-white/5 bg-[#202023] flex justify-between">
-               <button 
-                 onClick={deleteWorkout}
-                 className="flex items-center gap-2 text-red-400 hover:bg-red-500/10 px-4 py-2 rounded-xl transition-colors text-sm font-bold"
-               >
-                 <Trash2 size={18} />
-                 Удалить
-               </button>
+               <button onClick={deleteWorkout} className="flex items-center gap-2 text-red-400 hover:bg-red-500/10 px-4 py-2 rounded-xl transition-colors text-sm font-bold"><Trash2 size={18} /> Удалить</button>
                <div className="flex gap-3">
-                 <button 
-                   onClick={() => setIsModalOpen(false)}
-                   className="px-6 py-3 rounded-xl font-bold text-slate-400 hover:bg-white/5 transition-colors"
-                 >
-                   Отмена
-                 </button>
-                 <button 
-                   onClick={saveWorkout}
-                   className="px-8 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold shadow-lg shadow-blue-600/20 flex items-center gap-2 transition-all active:scale-95"
-                 >
-                   <Save size={18} />
-                   Сохранить
-                 </button>
+                 <button onClick={() => setIsModalOpen(false)} className="px-6 py-3 rounded-xl font-bold text-slate-400 hover:bg-white/5 transition-colors">Отмена</button>
+                 <button onClick={saveWorkout} className="px-8 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold shadow-lg shadow-blue-600/20 flex items-center gap-2 transition-all active:scale-95"><Save size={18} /> Сохранить</button>
                </div>
             </div>
-
           </div>
         </div>
       )}
