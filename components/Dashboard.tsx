@@ -65,7 +65,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
         {/* Header */}
         <header className="h-24 px-10 flex items-center justify-between border-b border-white/5 bg-zinc-950/30">
           <div className="flex items-center gap-6">
-            <h1 className="text-xl font-bold text-white uppercase tracking-widest">Dashboard</h1>
+            <h1 className="text-xl font-bold text-white uppercase tracking-widest">Твой план</h1>
             <div className="h-6 w-px bg-white/10" />
             <div className="relative hidden md:block">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-600" size={16} />
