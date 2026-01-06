@@ -6,13 +6,12 @@ const TELEGRAM_BOT_TOKEN = Deno.env.get('TELEGRAM_BOT_TOKEN')!
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 
-// БЕСПЛАТНАЯ МОДЕЛЬ (суффикс :free обязателен)
+// БЕСПЛАТНАЯ МОДЕЛЬ
 const AI_MODEL = "google/gemini-2.0-flash-exp:free"
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
-// --- ВОТ ЭТОЙ ЧАСТИ НЕ ХВАТАЛО ---
-// Вспомогательная функция для отправки сообщений
+// --- ВОТ ЭТОЙ ЧАСТИ У ТЕБЯ НЕ ХВАТАЛО (ОНА НУЖНА В НАЧАЛЕ) ---
 const sendTelegramMessage = async (chatId: number, text: string) => {
   const response = await fetch(
     `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`,
@@ -28,7 +27,7 @@ const sendTelegramMessage = async (chatId: number, text: string) => {
   )
   return response.json()
 }
-// ----------------------------------
+// -----------------------------------------------------------
 
 Deno.serve(async (req) => {
   try {
@@ -105,10 +104,10 @@ Deno.serve(async (req) => {
 
       const aiData = await aiResponse.json()
       
-      // Проверка на ошибки (например, модель перегружена)
+      // Проверка на ошибки
       if (aiData.error) {
           console.error("OpenRouter Error:", aiData.error)
-          await sendTelegramMessage(chatId, `⚠️ ИИ сейчас занят (бесплатный тариф). Попробуйте через минуту.\nОшибка: ${aiData.error.message}`)
+          await sendTelegramMessage(chatId, `⚠️ ИИ сейчас занят. Ошибка: ${aiData.error.message}`)
           return new Response('AI Error', { status: 200 })
       }
 
@@ -132,4 +131,12 @@ Deno.serve(async (req) => {
           return new Response('JSON Error', { status: 200 })
       }
 
-      // 4. СОХРАНЕНИЕ В Б
+      // 4. СОХРАНЕНИЕ В БАЗУ
+      const { error: insertError } = await supabase
+        .from('workouts')
+        .insert({
+          user_id: profile.id,
+          activity_date: workout.activity_date || new Date().toISOString().split('T')[0],
+          activity_type: workout.activity_type || 'Тренировка',
+          distance_km: workout.distance_km || 0,
+          duration_minutes: workout.duration
