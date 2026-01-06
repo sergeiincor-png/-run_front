@@ -11,37 +11,46 @@ const AI_MODEL = "google/gemini-2.0-flash-exp:free"
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
-// ✅ ВАЖНО: Эта функция стоит В НАЧАЛЕ файла.
+// ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ (В НАЧАЛЕ ФАЙЛА)
 const sendTelegramMessage = async (chatId: number, text: string) => {
-  const response = await fetch(
-    `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        chat_id: chatId,
-        text: text,
-        parse_mode: 'Markdown'
-      }),
-    }
-  )
-  return response.json()
+  try {
+    const response = await fetch(
+      `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: chatId,
+          text: text,
+          parse_mode: 'Markdown'
+        }),
+      }
+    )
+    return await response.json()
+  } catch (err) {
+    console.error("Failed to send Telegram message:", err)
+  }
 }
-// -----------------------------------------------------------
 
 Deno.serve(async (req) => {
   try {
     const update = await req.json()
     const message = update.message
 
-    // Игнорируем всё, кроме сообщений
+    // 1. ИГНОРИРУЕМ ВСЁ ЛИШНЕЕ
     if (!message || !message.chat) {
       return new Response('No message found', { status: 200 })
     }
 
+    // 🛑 ЗАЩИТА ОТ БЕСКОНЕЧНОГО ЦИКЛА 🛑
+    // Если сообщение от бота (в т.ч. от самого себя) — игнорируем
+    if (message.from && message.from.is_bot) {
+      return new Response('Ignored bot message', { status: 200 })
+    }
+
     const chatId = message.chat.id
 
-    // 1. АВТОРИЗАЦИЯ
+    // 2. АВТОРИЗАЦИЯ
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
       .select('id')
@@ -53,7 +62,7 @@ Deno.serve(async (req) => {
       return new Response('User not found', { status: 200 })
     }
 
-    // 2. ОБРАБОТКА ФОТО
+    // 3. ОБРАБОТКА ФОТО
     if (message.photo) {
       await sendTelegramMessage(chatId, "👀 Смотрю бесплатно через Gemini 2.0...")
 
@@ -71,7 +80,7 @@ Deno.serve(async (req) => {
       const arrayBuffer = await imageBlob.arrayBuffer()
       const base64Image = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)))
 
-      // 3. ЗАПРОС К OPENROUTER (Бесплатно)
+      // 4. ЗАПРОС К OPENROUTER
       const aiResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
         method: "POST",
         headers: {
@@ -104,10 +113,10 @@ Deno.serve(async (req) => {
 
       const aiData = await aiResponse.json()
       
-      // Проверка на ошибки
+      // Обработка ошибок ИИ
       if (aiData.error) {
           console.error("OpenRouter Error:", aiData.error)
-          await sendTelegramMessage(chatId, `⚠️ ИИ сейчас занят. Ошибка: ${aiData.error.message}`)
+          await sendTelegramMessage(chatId, `⚠️ Ошибка ИИ: ${aiData.error.message}`)
           return new Response('AI Error', { status: 200 })
       }
 
@@ -127,11 +136,11 @@ Deno.serve(async (req) => {
           workout = JSON.parse(cleanJson)
       } catch (e) {
           console.error("JSON Parse Error:", content)
-          await sendTelegramMessage(chatId, "❌ Не удалось прочитать данные с картинки.")
+          await sendTelegramMessage(chatId, "❌ Не удалось прочитать данные (ошибка JSON).")
           return new Response('JSON Error', { status: 200 })
       }
 
-      // 4. СОХРАНЕНИЕ В БАЗУ
+      // 5. СОХРАНЕНИЕ В БАЗУ
       const { error: insertError } = await supabase
         .from('workouts')
         .insert({
@@ -146,9 +155,9 @@ Deno.serve(async (req) => {
 
       if (insertError) {
           console.error("DB Error:", insertError)
-          await sendTelegramMessage(chatId, "❌ Ошибка базы данных.")
+          await sendTelegramMessage(chatId, "❌ Ошибка при сохранении в базу.")
       } else {
-          // 5. ОТВЕТ
+          // УСПЕХ
           const successMessage = `✅ *Тренировка сохранена!*
 
 📋 *${workout.title || 'Без названия'}*
@@ -162,6 +171,7 @@ Deno.serve(async (req) => {
       }
 
     } else {
+      // Это сообщение придет только если пишет человек (благодаря защите выше)
       await sendTelegramMessage(chatId, "📸 Пришлите мне скриншот вашей тренировки!")
     }
 
