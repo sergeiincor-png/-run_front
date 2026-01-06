@@ -181,10 +181,9 @@ const CalendarView: React.FC = () => {
   const openEditModal = (workout: Workout) => { setEditingWorkout({ ...workout }); setIsModalOpen(true); };
   
  const saveWorkout = async () => {
-    if (!editingWorkout || !editingWorkout.title) return;
+    if (!editingWorkout || !editingWorkout.title) return;
 
     // 1. Формируем дату для базы (YYYY-MM-DD)
-    // Месяцы в JS (0-11), поэтому добавляем +1
     const y = editingWorkout.year;
     const m = String(editingWorkout.month! + 1).padStart(2, '0');
     const d = String(editingWorkout.day).padStart(2, '0');
@@ -197,24 +196,15 @@ const CalendarView: React.FC = () => {
         activity_type: editingWorkout.type === 'run' ? 'Бег' : editingWorkout.type === 'strength' ? 'Силовая' : 'Старт',
         distance_km: editingWorkout.distance ? parseFloat(editingWorkout.distance) : 0,
         description: editingWorkout.description,
-        // user_id здесь добавится автоматически, если настроен Supabase Auth, 
-        // или нужно передавать его, если ты используешь анонимный доступ без Auth context.
-        // Но пока у тебя RLS public, это сработает.
+        // 👇 ВОТ ЭТА СТРОЧКА (добавь её сюда)
+        user_id: 'c98220ba-2f65-471e-898d-65ec00045f3c' 
     };
 
     // 3. Отправка в Supabase
-    // Проверяем: это новая запись (локальный длинный ID) или существующая (из базы)?
-    // Простой способ: попытаться обновить, если ID похож на базу. 
-    // Но проще использовать upsert, если ID валидный UUID.
-    
-    // ЛОГИКА:
-    // Если id сгенерирован crypto.randomUUID(), он скорее всего новый.
-    // Давай просто сделаем UPSERT (Вставка или Обновление)
-    
     const { error } = await supabase
         .from('workouts')
         .upsert({
-            id: editingWorkout.id, // Если ID есть в базе - обновит. Если нет - создаст.
+            id: editingWorkout.id, 
             ...payload
         });
 
@@ -224,17 +214,16 @@ const CalendarView: React.FC = () => {
         return;
     }
 
-    // 4. Обновляем локально (чтобы было быстро)
-    setWorkouts(prev => {
-      const idx = prev.findIndex(w => w.id === editingWorkout.id);
-      if (idx >= 0) { const updated = [...prev]; updated[idx] = editingWorkout as Workout; return updated; }
-      return [...prev, editingWorkout as Workout];
-    });
+    // 4. Обновляем локально
+    setWorkouts(prev => {
+      const idx = prev.findIndex(w => w.id === editingWorkout.id);
+      if (idx >= 0) { const updated = [...prev]; updated[idx] = editingWorkout as Workout; return updated; }
+      return [...prev, editingWorkout as Workout];
+    });
     
-    // На всякий случай обновляем список с сервера
     fetchWorkouts();
-    setIsModalOpen(false);
-  };
+    setIsModalOpen(false);
+};
   
  const deleteWorkout = async () => { 
       if (!editingWorkout) return; 
