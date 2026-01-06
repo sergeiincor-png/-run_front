@@ -190,8 +190,22 @@ const CalendarView: React.FC = () => {
     setIsModalOpen(false);
   };
   
-  const deleteWorkout = async () => { 
+ const deleteWorkout = async () => { 
       if (!editingWorkout) return; 
+
+      // 1. ОТПРАВЛЯЕМ КОМАНДУ В БАЗУ
+      const { error } = await supabase
+          .from('workouts')
+          .delete()
+          .eq('id', editingWorkout.id);
+
+      if (error) {
+          console.error("Ошибка удаления:", error);
+          alert("Не удалось удалить (проверь RLS политики)");
+          return;
+      }
+
+      // 2. ЕСЛИ УСПЕШНО — УБИРАЕМ С ЭКРАНА
       setWorkouts(prev => prev.filter(w => w.id !== editingWorkout.id));
       setIsModalOpen(false); 
   };
