@@ -147,6 +147,7 @@ Deno.serve(async (req) => {
       await sendTelegramMessage(chatId, "📸 Пришлите мне скриншот вашей тренировки!")
     }
 
+    
     return new Response('OK', { status: 200 })
 
   } catch (error) {
