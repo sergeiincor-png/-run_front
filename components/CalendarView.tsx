@@ -197,7 +197,7 @@ const CalendarView: React.FC = () => {
         distance_km: editingWorkout.distance ? parseFloat(editingWorkout.distance) : 0,
         description: editingWorkout.description,
         // 👇 ВОТ ЭТА СТРОЧКА (добавь её сюда)
-        user_id: 'c98220ba-2f65-471e-898d-65ec00045f3c' 
+        user_id: 'c98220ba-2f65-471e-898d-65ec07e55876' 
     };
 
     // 3. Отправка в Supabase
