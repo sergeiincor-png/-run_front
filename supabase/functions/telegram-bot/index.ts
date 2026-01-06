@@ -1,6 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.7"
 
-// КОНФИГУРАЦИЯ 
+// КОНФИГУРАЦИЯ
 const OPENROUTER_API_KEY = Deno.env.get('OPENROUTER_API_KEY')!
 const TELEGRAM_BOT_TOKEN = Deno.env.get('TELEGRAM_BOT_TOKEN')!
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
@@ -10,6 +10,25 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 const AI_MODEL = "google/gemini-2.0-flash-exp:free"
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+
+// --- ВОТ ЭТОЙ ЧАСТИ НЕ ХВАТАЛО ---
+// Вспомогательная функция для отправки сообщений
+const sendTelegramMessage = async (chatId: number, text: string) => {
+  const response = await fetch(
+    `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: chatId,
+        text: text,
+        parse_mode: 'Markdown'
+      }),
+    }
+  )
+  return response.json()
+}
+// ----------------------------------
 
 Deno.serve(async (req) => {
   try {
@@ -113,45 +132,4 @@ Deno.serve(async (req) => {
           return new Response('JSON Error', { status: 200 })
       }
 
-      // 4. СОХРАНЕНИЕ В БАЗУ
-      const { error: insertError } = await supabase
-        .from('workouts')
-        .insert({
-          user_id: profile.id,
-          activity_date: workout.activity_date || new Date().toISOString().split('T')[0],
-          activity_type: workout.activity_type || 'Тренировка',
-          distance_km: workout.distance_km || 0,
-          duration_minutes: workout.duration_minutes || 0,
-          calories: workout.calories || 0,
-          title: workout.title
-        })
-
-      if (insertError) {
-          console.error("DB Error:", insertError)
-          await sendTelegramMessage(chatId, "❌ Ошибка базы данных.")
-      } else {
-          // 5. ОТВЕТ
-          const successMessage = `✅ *Тренировка сохранена!*
-
-📋 *${workout.title || 'Без названия'}*
-📅 ${workout.activity_date}
-🏃 ${workout.activity_type}
-📏 ${workout.distance_km} км
-⏱ ${workout.duration_minutes} мин
-🔥 ${workout.calories} ккал`
-          
-          await sendTelegramMessage(chatId, successMessage)
-      }
-
-    } else {
-      await sendTelegramMessage(chatId, "📸 Пришлите мне скриншот вашей тренировки!")
-    }
-
-    
-    return new Response('OK', { status: 200 })
-
-  } catch (error) {
-    console.error("Global Error:", error)
-    return new Response(JSON.stringify({ error: error.message }), { status: 200 })
-  }
-})
+      // 4. СОХРАНЕНИЕ В Б
