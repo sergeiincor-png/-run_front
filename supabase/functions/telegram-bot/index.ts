@@ -1,6 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.7"
 
-// КОНФИГУРАЦИЯ
+// КОНФИГУРАЦИЯ 
 const OPENROUTER_API_KEY = Deno.env.get('OPENROUTER_API_KEY')!
 const TELEGRAM_BOT_TOKEN = Deno.env.get('TELEGRAM_BOT_TOKEN')!
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
