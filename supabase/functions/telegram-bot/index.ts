@@ -11,7 +11,7 @@ const AI_MODEL = "google/gemini-2.0-flash-exp:free"
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
-// --- ВОТ ЭТОЙ ЧАСТИ У ТЕБЯ НЕ ХВАТАЛО (ОНА НУЖНА В НАЧАЛЕ) ---
+// ✅ ВАЖНО: Эта функция стоит В НАЧАЛЕ файла.
 const sendTelegramMessage = async (chatId: number, text: string) => {
   const response = await fetch(
     `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`,
@@ -139,4 +139,36 @@ Deno.serve(async (req) => {
           activity_date: workout.activity_date || new Date().toISOString().split('T')[0],
           activity_type: workout.activity_type || 'Тренировка',
           distance_km: workout.distance_km || 0,
-          duration_minutes: workout.duration
+          duration_minutes: workout.duration_minutes || 0,
+          calories: workout.calories || 0,
+          title: workout.title
+        })
+
+      if (insertError) {
+          console.error("DB Error:", insertError)
+          await sendTelegramMessage(chatId, "❌ Ошибка базы данных.")
+      } else {
+          // 5. ОТВЕТ
+          const successMessage = `✅ *Тренировка сохранена!*
+
+📋 *${workout.title || 'Без названия'}*
+📅 ${workout.activity_date}
+🏃 ${workout.activity_type}
+📏 ${workout.distance_km} км
+⏱ ${workout.duration_minutes} мин
+🔥 ${workout.calories} ккал`
+          
+          await sendTelegramMessage(chatId, successMessage)
+      }
+
+    } else {
+      await sendTelegramMessage(chatId, "📸 Пришлите мне скриншот вашей тренировки!")
+    }
+
+    return new Response('OK', { status: 200 })
+
+  } catch (error) {
+    console.error("Global Error:", error)
+    return new Response(JSON.stringify({ error: error.message }), { status: 200 })
+  }
+})
