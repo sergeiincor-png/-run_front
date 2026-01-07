@@ -22,40 +22,29 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete, userId }) => {
 
     setIsSaving(true);
     
-    // Формируем объект данных строго по структуре таблицы
+    // Формируем данные БЕЗ updated_at, чтобы не провоцировать ошибку 400
     const profileData = {
       id: userId,
       fitness_level: level,
       goal_distance_km: Number(goal),
-      target_race_date: date,
-      updated_at: new Date().toISOString()
+      target_race_date: date
     };
 
     console.log("Попытка сохранения данных:", profileData);
 
     try {
-      // Используем upsert с явным указанием конфликта по id
-      const { error, status, statusText } = await supabase
+      // Используем upsert для создания или обновления записи
+      const { error } = await supabase
         .from('profiles')
         .upsert(profileData, { onConflict: 'id' });
 
-      if (error) {
-        console.error("Supabase Error Details:", {
-          message: error.message,
-          code: error.code,
-          details: error.details,
-          hint: error.hint,
-          status,
-          statusText
-        });
-        throw error;
-      }
+      if (error) throw error;
       
       console.log("Профиль успешно сохранен!");
-      onComplete();
+      onComplete(); // Переходим в Dashboard
     } catch (error: any) {
-      console.error("Full Error Object:", error);
-      alert(`Ошибка базы данных: ${error.message || 'Неизвестная ошибка'}. Проверьте консоль (F12).`);
+      console.error("Ошибка сохранения:", error.message);
+      alert(`Ошибка базы данных: ${error.message}`);
     } finally {
       setIsSaving(false);
     }
