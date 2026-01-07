@@ -42,11 +42,10 @@ export const generateInitialPlan = async (userId: string) => {
 
     if (!response.ok) {
       const errText = await response.text();
-      console.error("OpenRouter Error:", errText);
       throw new Error(`Ошибка API (${response.status})`);
     }
 
-    // 4. Парсинг
+    // 4. Обработка JSON
     const result = await response.json();
     const content = result.choices?.[0]?.message?.content;
     if (!content) throw new Error("Пустой ответ от ИИ");
@@ -57,20 +56,30 @@ export const generateInitialPlan = async (userId: string) => {
     try {
         plan = JSON.parse(cleanJson);
     } catch (e) {
-        console.error("Bad JSON:", cleanJson);
         throw new Error("Ошибка формата JSON от ИИ.");
     }
 
-    // 5. БЕЗОПАСНАЯ ЗАПИСЬ
-    // Теперь мы явно прописываем и duration тоже
-    const formattedPlan = plan.map((w: any) => ({
-      user_id: userId,
-      day: w.day || w.date || "День ?",
-      activity: w.activity || w.workout || w.activities || "Бег", 
-      distance: w.distance || "",
-      duration: w.duration || "", // <--- Добавили обработку duration
-      description: w.description || w.details || ""
-    }));
+    // 5. ПОДГОТОВКА ДАТЫ (СЕГОДНЯ)
+    const startDate = new Date();
+
+    // 6. БЕЗОПАСНАЯ ЗАПИСЬ С КАЛЕНДАРНЫМИ ДАТАМИ
+    const formattedPlan = plan.map((w: any, index: number) => {
+      // Рассчитываем дату: Сегодня + index дней
+      const workoutDate = new Date(startDate);
+      workoutDate.setDate(startDate.getDate() + index);
+
+      return {
+        user_id: userId,
+        // Записываем рассчитанную дату, чтобы база не ругалась на scheduled_date
+        scheduled_date: workoutDate.toISOString(), 
+        
+        day: w.day || `День ${index + 1}`,
+        activity: w.activity || w.workout || w.activities || "Бег", 
+        distance: w.distance || "",
+        duration: w.duration || "",
+        description: w.description || w.details || ""
+      };
+    });
 
     const { error: insertError } = await supabase.from('training_plans').insert(formattedPlan);
 
