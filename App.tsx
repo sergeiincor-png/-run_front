@@ -3,93 +3,67 @@ import { supabase } from './supabaseClient';
 import LandingPage from './components/LandingPage';
 import Dashboard from './components/Dashboard';
 import Onboarding from './components/Onboarding';
-import { Loader2 } from 'lucide-react';
 
 const App: React.FC = () => {
-  const [user, setUser] = useState<any>(null);
+  const [session, setSession] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [needsOnboarding, setNeedsOnboarding] = useState(false);
 
   useEffect(() => {
-    const checkUser = async () => {
-      // 1. Проверяем сессию пользователя
-      const { data: { session } } = await supabase.auth.getSession();
-      const currentUser = session?.user ?? null;
-      setUser(currentUser);
+    // 1. Слушаем состояние авторизации
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      if (session) checkProfile(session.user.id);
+      else setLoading(false);
+    });
 
-      if (currentUser) {
-        try {
-          // 2. Проверяем профиль в базе. Используем .maybeSingle(), 
-          // чтобы избежать ошибки 406, если записи еще нет
-          const { data: profile, error } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', currentUser.id)
-            .maybeSingle();
-
-          if (error) {
-            console.error("Ошибка при запросе профиля:", error.message);
-          }
-
-          // 3. Если профиля нет или не выбран уровень подготовки — отправляем на онбординг
-          if (!profile || !profile.fitness_level) {
-            setShowOnboarding(true);
-          } else {
-            setShowOnboarding(false);
-          }
-        } catch (err) {
-          console.error("Системная ошибка:", err);
-        }
-      }
-      setLoading(false);
-    };
-
-    checkUser();
-
-    // Слушатель изменений состояния (вход/выход)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      const newUser = session?.user ?? null;
-      setUser(newUser);
-      
-      // Если пользователь вышел, сбрасываем состояние онбординга
-      if (!newUser) {
-        setShowOnboarding(false);
+      setSession(session);
+      if (session) checkProfile(session.user.id);
+      else {
+        setNeedsOnboarding(false);
+        setLoading(false);
       }
     });
 
     return () => subscription.unsubscribe();
   }, []);
 
-  // Экран загрузки
+  // 2. Проверяем, заполнял ли пользователь анкету
+  const checkProfile = async (userId: string) => {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('fitness_level')
+      .eq('id', userId)
+      .single();
+
+    // Если профиля нет или fitness_level пустой — отправляем на онбординг
+    if (error || !data || !data.fitness_level) {
+      setNeedsOnboarding(true);
+    } else {
+      setNeedsOnboarding(false);
+    }
+    setLoading(false);
+  };
+
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#09090b] flex flex-col items-center justify-center gap-4">
-        <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center font-bold italic text-white text-2xl shadow-xl animate-bounce">RC</div>
-        <Loader2 className="animate-spin text-blue-500" size={32} />
-        <span className="text-slate-500 text-xs font-bold uppercase tracking-[0.3em] animate-pulse">Проверка системы...</span>
+      <div className="min-h-screen bg-[#09090b] flex items-center justify-center">
+        <div className="text-blue-500 animate-pulse font-black italic text-2xl">RUN COACH...</div>
       </div>
     );
   }
 
-  // Основной роутинг приложения
-  
-  // 1. Если не авторизован — Лендинг
-  if (!user) {
-    return <LandingPage />;
+  // Если не залогинен — Landing
+  if (!session) return <LandingPage />;
+
+  // Если залогинен, но нет данных профиля — Onboarding
+  if (needsOnboarding) {
+    return <Onboarding userId={session.user.id} onComplete={() => setNeedsOnboarding(false)} />;
   }
 
-  // 2. Если авторизован, но профиль не заполнен — Онбординг
-  if (showOnboarding) {
-    return (
-      <Onboarding 
-        userId={user.id} 
-        onComplete={() => setShowOnboarding(false)} 
-      />
-    );
-  }
-
-  // 3. Если всё в порядке — Дашборд (Личный кабинет)
-  return <Dashboard user={user} />;
+  // Если всё есть — Dashboard
+  return <Dashboard userId={session.user.id} />;
 };
 
 export default App;
