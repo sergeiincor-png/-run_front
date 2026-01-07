@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
-// ВОТ ЗДЕСЬ БЫЛА ОШИБКА. Добавил Activity в список импорта 👇
+// 👇 ВАЖНО: Activity добавлена в этот список
 import { ChevronLeft, ChevronRight, Activity, LogOut } from 'lucide-react';
 
 interface Workout {
@@ -57,7 +57,7 @@ const Dashboard: React.FC<{ session: any }> = ({ session }) => {
           <h2 className="text-2xl font-bold italic uppercase">{monthNames[currentDate.getMonth()]} {currentDate.getFullYear()}</h2>
           <button onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1))} className="p-2 bg-white/5 rounded-lg"><ChevronRight /></button>
           
-          {/* Вот здесь используется Activity, теперь она не упадет */}
+          {/* Теперь это не вызовет ошибку, так как Activity импортирована */}
           {isLoading && <Activity className="animate-spin text-blue-500" />}
         </div>
         <button onClick={() => supabase.auth.signOut()} className="p-2 text-red-500 hover:bg-red-500/10 rounded-lg transition-all"><LogOut size={20}/></button>
