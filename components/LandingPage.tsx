@@ -1,6 +1,6 @@
 import React from 'react';
 import { supabase } from '../supabaseClient';
-import { zap, Target, Trophy, ChevronRight, Activity, Gauge, Sparkles } from 'lucide-react';
+import { Zap, Target, Trophy, ChevronRight, Activity, Gauge, Sparkles } from 'lucide-react';
 
 const LandingPage: React.FC = () => {
   // Функция для входа/регистрации (вызывает окно Supabase Auth)
