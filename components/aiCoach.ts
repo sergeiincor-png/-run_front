@@ -68,15 +68,17 @@ export const generateInitialPlan = async (userId: string) => {
         throw new Error("ИИ вернул некорректный формат данных. Попробуйте снова.");
     }
 
-    // 6. Записываем в базу данных
-    // Внимание: поля здесь должны совпадать с колонками в Supabase
+  // 6. Записываем в базу данных
     const { error: insertError } = await supabase.from('training_plans').insert(
       plan.map((w: any) => ({
         user_id: userId,
         day: w.day,
-        activity: w.activity,
         distance: w.distance,
-        description: w.description
+        description: w.description,
+        // ХАК: Пишем и туда и сюда, чтобы база точно приняла данные
+        // Если ИИ вернул activity, кладем в activity. Если activities - то туда.
+        activity: w.activity || w.activities || "Бег", 
+        activities: w.activity || w.activities || "Бег"
       }))
     );
 
