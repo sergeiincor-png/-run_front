@@ -6,16 +6,16 @@ export const generateInitialPlan = async (userId: string) => {
     const { data: profile } = await supabase.from('profiles').select('*').eq('id', userId).single();
     if (!profile) throw new Error("Профиль не найден в БД");
 
-    // 2. Достаем ключ из .env
+    // 2. Ключ из .env
     const key = import.meta.env.VITE_OPENROUTER_API_KEY;
     
     if (!key || key === "undefined") {
-       console.error("API Key is missing. Check .env file.");
-       alert("ОШИБКА: Не найден API ключ в настройках.");
+       console.error("API Key is missing in .env");
+       alert("ОШИБКА: Не найден API ключ.");
        return { success: false };
     }
 
-    // 3. Запрос к ИИ с жесткой инструкцией по JSON
+    // 3. Запрос к ИИ
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -28,13 +28,13 @@ export const generateInitialPlan = async (userId: string) => {
         "messages": [
           { 
             "role": "system", 
-            "content": "Ты тренер. Твоя задача — генерировать JSON. Не пиши вступлений." 
+            "content": "Ты тренер. Отвечай только JSON массивом. Не пиши вступлений." 
           },
           { 
             "role": "user", 
             "content": `Создай план бега на неделю для уровня ${profile.fitness_level}. 
             Ответ должен быть СТРОГО JSON массивом.
-            Используй ключи: "day" (день недели), "activity" (тип тренировки), "distance" (дистанция), "description" (описание).` 
+            Используй ключи: "day", "activity", "distance", "duration", "description".` 
           }
         ]
       })
@@ -43,15 +43,14 @@ export const generateInitialPlan = async (userId: string) => {
     if (!response.ok) {
       const errText = await response.text();
       console.error("OpenRouter Error:", errText);
-      throw new Error(`Ошибка ИИ (${response.status})`);
+      throw new Error(`Ошибка API (${response.status})`);
     }
 
-    // 4. Обработка ответа
+    // 4. Парсинг
     const result = await response.json();
     const content = result.choices?.[0]?.message?.content;
     if (!content) throw new Error("Пустой ответ от ИИ");
 
-    // Чистим JSON от лишнего мусора
     const cleanJson = content.replace(/```json|```/g, "").trim();
     let plan;
     
@@ -59,18 +58,17 @@ export const generateInitialPlan = async (userId: string) => {
         plan = JSON.parse(cleanJson);
     } catch (e) {
         console.error("Bad JSON:", cleanJson);
-        throw new Error("Ошибка чтения ответа от ИИ (неверный формат).");
+        throw new Error("Ошибка формата JSON от ИИ.");
     }
 
-    // 5. БЕЗОПАСНАЯ ЗАПИСЬ (Маппинг)
-    // Мы приводим любые ключи от ИИ к 4 стандартным колонкам базы.
-    // Это решит проблему "Could not find column 'workout'".
+    // 5. БЕЗОПАСНАЯ ЗАПИСЬ
+    // Теперь мы явно прописываем и duration тоже
     const formattedPlan = plan.map((w: any) => ({
       user_id: userId,
       day: w.day || w.date || "День ?",
-      // Если ИИ прислал "workout" или "activities", мы все равно запишем это в колонку "activity"
       activity: w.activity || w.workout || w.activities || "Бег", 
       distance: w.distance || "",
+      duration: w.duration || "", // <--- Добавили обработку duration
       description: w.description || w.details || ""
     }));
 
