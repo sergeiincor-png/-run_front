@@ -15,24 +15,47 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete, userId }) => {
   const [isSaving, setIsSaving] = useState(false);
 
   const saveProfile = async () => {
-    setIsSaving(true);
-    try {
-      // Сохраняем данные. Убедись, что названия полей точно такие же, как в SQL
-      const { error } = await supabase
-        .from('profiles')
-        .upsert({
-          id: userId,
-          fitness_level: level,
-          goal_distance_km: goal,
-          target_race_date: date,
-          updated_at: new Date().toISOString()
-        });
+    if (!level || !goal || !date) {
+      alert("Пожалуйста, заполните все данные");
+      return;
+    }
 
-      if (error) throw error;
+    setIsSaving(true);
+    
+    // Формируем объект данных строго по структуре таблицы
+    const profileData = {
+      id: userId,
+      fitness_level: level,
+      goal_distance_km: Number(goal),
+      target_race_date: date,
+      updated_at: new Date().toISOString()
+    };
+
+    console.log("Попытка сохранения данных:", profileData);
+
+    try {
+      // Используем upsert с явным указанием конфликта по id
+      const { error, status, statusText } = await supabase
+        .from('profiles')
+        .upsert(profileData, { onConflict: 'id' });
+
+      if (error) {
+        console.error("Supabase Error Details:", {
+          message: error.message,
+          code: error.code,
+          details: error.details,
+          hint: error.hint,
+          status,
+          statusText
+        });
+        throw error;
+      }
       
+      console.log("Профиль успешно сохранен!");
       onComplete();
     } catch (error: any) {
-      alert('Ошибка базы данных: ' + error.message);
+      console.error("Full Error Object:", error);
+      alert(`Ошибка базы данных: ${error.message || 'Неизвестная ошибка'}. Проверьте консоль (F12).`);
     } finally {
       setIsSaving(false);
     }
@@ -45,7 +68,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete, userId }) => {
         {step === 1 && (
           <div className="space-y-6 animate-in fade-in duration-500">
             <div className="flex justify-center"><Trophy className="text-blue-500" size={48} /></div>
-            <h2 className="text-2xl font-bold text-center italic tracking-tight">ТВОЙ УРОВЕНЬ?</h2>
+            <h2 className="text-2xl font-bold text-center italic tracking-tight uppercase">Твой уровень?</h2>
             <div className="grid gap-3">
               {[
                 { id: 'beginner', label: 'Новичок', desc: 'Начинаю с нуля' },
@@ -68,29 +91,30 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete, userId }) => {
         {step === 2 && (
           <div className="space-y-6 animate-in slide-in-from-right duration-500">
             <div className="flex justify-center"><Target className="text-blue-500" size={48} /></div>
-            <h2 className="text-2xl font-bold text-center italic tracking-tight">ДИСТАНЦИЯ ЦЕЛИ</h2>
+            <h2 className="text-2xl font-bold text-center italic tracking-tight uppercase">Дистанция цели</h2>
             <div className="flex gap-4">
               {[5, 10, 21].map((g) => (
                 <button 
                   key={g}
                   onClick={() => { setGoal(g); setStep(3); }}
-                  className="flex-1 p-6 rounded-2xl border border-white/5 bg-white/5 hover:border-blue-500 hover:bg-blue-500/10 transition-all"
+                  className={`flex-1 p-6 rounded-2xl border transition-all ${goal === g ? 'border-blue-500 bg-blue-500/10' : 'border-white/5 bg-white/5 hover:border-blue-500/50'}`}
                 >
                   <div className="text-2xl font-black">{g}</div>
                   <div className="text-[10px] text-slate-500 uppercase font-bold">км</div>
                 </button>
               ))}
             </div>
-            <button onClick={() => setStep(1)} className="w-full text-slate-500 text-xs">Назад</button>
+            <button onClick={() => setStep(1)} className="w-full text-slate-500 text-xs hover:text-white transition-colors">← Назад</button>
           </div>
         )}
 
         {step === 3 && (
           <div className="space-y-6 animate-in slide-in-from-right duration-500">
             <div className="flex justify-center"><Calendar className="text-blue-500" size={48} /></div>
-            <h2 className="text-2xl font-bold text-center italic tracking-tight">КОГДА ЗАБЕГ?</h2>
+            <h2 className="text-2xl font-bold text-center italic tracking-tight uppercase">Когда забег?</h2>
             <input 
               type="date" 
+              value={date}
               onChange={(e) => setDate(e.target.value)}
               className="w-full p-4 bg-white/5 border border-white/10 rounded-2xl focus:border-blue-500 outline-none text-white font-mono"
             />
@@ -101,7 +125,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete, userId }) => {
             >
               {isSaving ? <Loader2 className="animate-spin" /> : <>Создать план <ChevronRight size={20} /></>}
             </button>
-            <button onClick={() => setStep(2)} className="w-full text-slate-500 text-xs">Назад</button>
+            <button onClick={() => setStep(2)} className="w-full text-slate-500 text-xs hover:text-white transition-colors">← Назад</button>
           </div>
         )}
       </div>
