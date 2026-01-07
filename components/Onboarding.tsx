@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { supabase } from '../supabaseClient';
 import { Trophy, Target, Calendar, ChevronRight, Loader2 } from 'lucide-react';
 // ВАЖНО: Добавляем импорт ИИ-сервиса
-import { generateInitialPlan } from '../services/aiCoach';
+import { generateInitialPlan } from './aiCoach';
 
 interface OnboardingProps {
   onComplete: () => void;
