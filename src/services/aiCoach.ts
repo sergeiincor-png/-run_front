@@ -1,53 +1,45 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { supabase } from "../supabaseClient";
 
-// Инициализация Gemini
+// Подключаем Gemini через твой ключ из .env.local
 const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY || "");
 
 export const generateInitialPlan = async (userId: string) => {
   try {
-    console.log("Запуск ИИ-генератора для пользователя:", userId);
+    console.log("1. ИИ получил команду на создание плана...");
 
-    // 1. Получаем данные профиля пользователя
-    const { data: profile, error: profileError } = await supabase
+    // Берем данные профиля из базы
+    const { data: profile } = await supabase
       .from('profiles')
       .select('*')
       .eq('id', userId)
       .single();
 
-    if (profileError || !profile) throw new Error("Профиль не найден в базе");
+    if (!profile) throw new Error("Профиль не найден");
 
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
-    // 2. Промпт для генерации плана
-    const prompt = `Ты — профессиональный тренер. Составь план на 7 дней для атлета:
-      Уровень: ${profile.fitness_level}, Цель: ${profile.goal_distance_km} км.
-      Верни СТРОГО JSON массив без текста:
-      [
-        {
-          "scheduled_date": "2026-01-08",
-          "workout_type": "easy run",
-          "target_distance_km": 5,
-          "target_pace": "6:30",
-          "description": "Легкий бег для вкатки"
-        }
-      ]`;
+    // Формируем задание для ИИ
+    const prompt = `Ты профессиональный тренер. Составь план на 7 дней.
+      Уровень: ${profile.fitness_level}, Цель: ${profile.goal_distance_km}км.
+      Верни ТОЛЬКО JSON массив:
+      [{"scheduled_date": "2026-01-08", "workout_type": "easy", "target_distance_km": 5, "target_pace": "6:30", "description": "Пробежка"}]`;
 
     const result = await model.generateContent(prompt);
     const response = await result.response;
     const text = response.text().replace(/```json|```/g, "").trim();
     const plan = JSON.parse(text);
 
-    // 3. Сохраняем тренировки в таблицу
-    const { error: insertError } = await supabase
+    // Сохраняем результат в таблицу тренировок
+    const { error } = await supabase
       .from('training_plans')
-      .insert(plan.map((w: any) => ({ ...w, user_id: userId })));
+      .insert(plan.map((workout: any) => ({ ...workout, user_id: userId })));
 
-    if (insertError) throw insertError;
-
+    if (error) throw error;
+    console.log("2. План успешно сохранен в базу!");
     return { success: true };
-  } catch (err) {
-    console.error("Ошибка в aiCoach:", err);
-    return { success: false, error: err };
+  } catch (error) {
+    console.error("Ошибка ИИ:", error);
+    return { success: false, error };
   }
 };
