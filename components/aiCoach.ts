@@ -21,7 +21,7 @@ const key = "sk-or-v1-685ed29c58454bd38382bb446a8820cd588dff58ffca28abcf89c916ff
         "HTTP-Referer": window.location.origin
       },
       body: JSON.stringify({
-        "model": "google/gemini-flash-1.5",
+       "model": "openai/gpt-4o-mini"
         "messages": [
           { "role": "system", "content": "Ты тренер. Отвечай только JSON массивом." },
           { "role": "user", "content": `План на неделю для уровня ${profile.fitness_level}.` }
