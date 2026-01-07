@@ -1,128 +1,159 @@
 import React, { useState } from 'react';
 import { supabase } from '../supabaseClient';
-import { Trophy, Target, Calendar, ChevronRight, Loader2 } from 'lucide-react';
-// ВАЖНО: Добавляем импорт ИИ-сервиса
 import { generateInitialPlan } from './aiCoach';
+import { ChevronRight, ChevronLeft, Target, Gauge, Calendar, CheckCircle2 } from 'lucide-react';
 
 interface OnboardingProps {
   onComplete: () => void;
-  userId: string;
 }
 
-const Onboarding: React.FC<OnboardingProps> = ({ onComplete, userId }) => {
+const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
   const [step, setStep] = useState(1);
-  const [level, setLevel] = useState('');
-  const [goal, setGoal] = useState(5);
-  const [date, setDate] = useState('');
-  const [isSaving, setIsSaving] = useState(false);
+  const [loading, setLoading] = useState(false);
+  
+  // Состояние анкеты
+  const [formData, setFormData] = useState({
+    fitness_level: '',
+    goal_distance_km: 5,
+    target_race_date: ''
+  });
 
-  const saveProfile = async () => {
-    if (!level || !goal || !date) {
-      alert("Пожалуйста, заполните все данные");
-      return;
-    }
+  const levels = [
+    { id: 'beginner', label: 'Новичок', desc: 'Бегаю редко или только начинаю', icon: <Gauge className="w-5 h-5" /> },
+    { id: 'intermediate', label: 'Любитель', desc: 'Бегаю 2-3 раза в неделю', icon: <Activity className="w-5 h-5" /> },
+    { id: 'advanced', label: 'Продвинутый', desc: 'Готовлюсь к стартам регулярно', icon: <Target className="w-5 h-5" /> }
+  ];
 
-    setIsSaving(true);
-    
-    const profileData = {
-      id: userId,
-      fitness_level: level,
-      goal_distance_km: Number(goal),
-      target_race_date: date
-    };
+  const handleNext = () => setStep(step + 1);
+  const handleBack = () => setStep(step - 1);
 
-    console.log("Попытка сохранения данных профиля:", profileData);
-
+  const handleSubmit = async () => {
+    setLoading(true);
     try {
-      // 1. Сохраняем данные профиля в Supabase
-      const { error } = await supabase
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Пользователь не авторизован");
+
+      // 1. Сохраняем профиль в Supabase
+      const { error: profileError } = await supabase
         .from('profiles')
-        .upsert(profileData, { onConflict: 'id' });
+        .upsert({
+          id: user.id,
+          fitness_level: formData.fitness_level,
+          goal_distance_km: formData.goal_distance_km,
+          target_race_date: formData.target_race_date,
+          updated_at: new Date()
+        });
 
-      if (error) throw error;
+      if (profileError) throw profileError;
+
+      // 2. Генерируем первый план через ИИ
+      const result = await generateInitialPlan(user.id);
       
-      console.log("Профиль сохранен. Запускаем ИИ для генерации плана...");
-
-      // 2. ЗАПУСКАЕМ ИИ-ТРЕНЕРА (та самая магия)
-      await generateInitialPlan(userId); 
-
-      // 3. Закрываем онбординг и переходим в Dashboard
-      onComplete(); 
-    } catch (error: any) {
-      console.error("Ошибка:", error.message);
-      alert(`Ошибка: ${error.message}`);
+      if (result.success) {
+        onComplete(); // Возвращаемся в App.tsx, который переключит нас на Dashboard
+      }
+    } catch (err: any) {
+      alert("Ошибка при сохранении: " + err.message);
     } finally {
-      setIsSaving(false);
+      setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-[#09090b] text-white flex items-center justify-center p-4 font-sans">
-      <div className="max-w-md w-full glass-card p-8 rounded-3xl border border-white/10 bg-white/5 backdrop-blur-xl shadow-2xl">
+    <div className="min-h-screen bg-[#020617] text-white flex flex-col items-center justify-center p-6">
+      
+      {/* Прогресс-бар */}
+      <div className="w-full max-w-md mb-12 flex gap-2">
+        {[1, 2, 3].map((s) => (
+          <div 
+            key={s} 
+            className={`h-1 flex-1 rounded-full transition-all duration-500 ${s <= step ? 'bg-blue-500' : 'bg-white/10'}`} 
+          />
+        ))}
+      </div>
+
+      <div className="w-full max-w-md">
         
+        {/* --- ШАГ 1: УРОВЕНЬ --- */}
         {step === 1 && (
-          <div className="space-y-6 animate-in fade-in duration-500">
-            <div className="flex justify-center"><Trophy className="text-blue-500" size={48} /></div>
-            <h2 className="text-2xl font-bold text-center italic tracking-tight uppercase">Твой уровень?</h2>
+          <div className="space-y-6 animate-in fade-in slide-in-from-right-4">
+            <h2 className="text-3xl font-black italic tracking-tight">ТВОЙ УРОВЕНЬ?</h2>
             <div className="grid gap-3">
-              {[
-                { id: 'beginner', label: 'Новичок', desc: 'Начинаю с нуля' },
-                { id: 'intermediate', label: 'Любитель', desc: 'Бегаю 1-2 раза в неделю' },
-                { id: 'advanced', label: 'Профи', desc: 'Готовлюсь к рекордам' }
-              ].map((l) => (
-                <button 
-                  key={l.id}
-                  onClick={() => { setLevel(l.id); setStep(2); }}
-                  className="p-4 rounded-2xl border border-white/5 bg-white/5 hover:border-blue-500/50 hover:bg-blue-500/10 transition-all text-left group"
+              {levels.map((level) => (
+                <button
+                  key={level.id}
+                  onClick={() => { setFormData({...formData, fitness_level: level.id}); handleNext(); }}
+                  className={`flex items-center gap-4 p-5 rounded-2xl border-2 transition-all text-left ${
+                    formData.fitness_level === level.id ? 'border-blue-500 bg-blue-500/10' : 'border-white/5 bg-white/5 hover:border-white/20'
+                  }`}
                 >
-                  <div className="font-bold group-hover:text-blue-400">{l.label}</div>
-                  <div className="text-xs text-slate-500">{l.desc}</div>
+                  <div className="p-3 rounded-xl bg-blue-500/20 text-blue-400">{level.icon}</div>
+                  <div>
+                    <div className="font-bold">{level.label}</div>
+                    <div className="text-xs text-slate-500">{level.desc}</div>
+                  </div>
                 </button>
               ))}
             </div>
           </div>
         )}
 
+        {/* --- ШАГ 2: ДИСТАНЦИЯ --- */}
         {step === 2 && (
-          <div className="space-y-6 animate-in slide-in-from-right duration-500">
-            <div className="flex justify-center"><Target className="text-blue-500" size={48} /></div>
-            <h2 className="text-2xl font-bold text-center italic tracking-tight uppercase">Дистанция цели</h2>
-            <div className="flex gap-4">
-              {[5, 10, 21].map((g) => (
-                <button 
-                  key={g}
-                  onClick={() => { setGoal(g); setStep(3); }}
-                  className={`flex-1 p-6 rounded-2xl border transition-all ${goal === g ? 'border-blue-500 bg-blue-500/10' : 'border-white/5 bg-white/5 hover:border-blue-500/50'}`}
+          <div className="space-y-6 animate-in fade-in slide-in-from-right-4">
+            <h2 className="text-3xl font-black italic tracking-tight">КАКАЯ ЦЕЛЬ?</h2>
+            <div className="grid grid-cols-2 gap-3">
+              {[5, 10, 21, 42].map((km) => (
+                <button
+                  key={km}
+                  onClick={() => { setFormData({...formData, goal_distance_km: km}); handleNext(); }}
+                  className="p-6 rounded-2xl border-2 border-white/5 bg-white/5 hover:border-blue-500/50 transition-all"
                 >
-                  <div className="text-2xl font-black">{g}</div>
-                  <div className="text-[10px] text-slate-500 uppercase font-bold">км</div>
+                  <div className="text-3xl font-black mb-1">{km}</div>
+                  <div className="text-xs font-bold text-slate-500 uppercase">километров</div>
                 </button>
               ))}
             </div>
-            <button onClick={() => setStep(1)} className="w-full text-slate-500 text-xs hover:text-white transition-colors">← Назад</button>
+            <button onClick={handleBack} className="text-slate-500 font-bold flex items-center gap-2">
+              <ChevronLeft size={18} /> Назад
+            </button>
           </div>
         )}
 
+        {/* --- ШАГ 3: ДАТА И ФИНИШ --- */}
         {step === 3 && (
-          <div className="space-y-6 animate-in slide-in-from-right duration-500">
-            <div className="flex justify-center"><Calendar className="text-blue-500" size={48} /></div>
-            <h2 className="text-2xl font-bold text-center italic tracking-tight uppercase">Когда забег?</h2>
-            <input 
-              type="date" 
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              className="w-full p-4 bg-white/5 border border-white/10 rounded-2xl focus:border-blue-500 outline-none text-white font-mono"
-            />
-            <button 
-              onClick={saveProfile}
-              disabled={!date || isSaving}
-              className="w-full py-4 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 rounded-2xl font-black flex items-center justify-center gap-2 transition-all shadow-lg shadow-blue-600/20 uppercase tracking-tighter"
+          <div className="space-y-6 animate-in fade-in slide-in-from-right-4">
+            <h2 className="text-3xl font-black italic tracking-tight">КОГДА ЗАБЕГ?</h2>
+            <div className="relative">
+              <input 
+                type="date" 
+                className="w-full bg-white/5 border-2 border-white/5 rounded-2xl p-5 text-lg font-bold focus:border-blue-500 outline-none transition-all"
+                onChange={(e) => setFormData({...formData, target_race_date: e.target.value})}
+              />
+              <Calendar className="absolute right-5 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
+            </div>
+
+            <button
+              onClick={handleSubmit}
+              disabled={loading || !formData.target_race_date}
+              className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white p-5 rounded-2xl font-black text-xl flex items-center justify-center gap-3 transition-all shadow-xl shadow-blue-600/20"
             >
-              {isSaving ? <Loader2 className="animate-spin" /> : <>Создать план <ChevronRight size={20} /></>}
+              {loading ? (
+                <div className="w-6 h-6 border-3 border-white border-t-transparent rounded-full animate-spin"></div>
+              ) : (
+                <>
+                  <CheckCircle2 />
+                  <span>СОЗДАТЬ ПЛАН</span>
+                </>
+              )}
             </button>
-            <button onClick={() => setStep(2)} className="w-full text-slate-500 text-xs hover:text-white transition-colors">← Назад</button>
+
+            <button onClick={handleBack} className="w-full text-slate-500 font-bold">
+              Назад
+            </button>
           </div>
         )}
+
       </div>
     </div>
   );
