@@ -5,7 +5,7 @@ export const generateInitialPlan = async (userId: string) => {
     const { data: profile } = await supabase.from('profiles').select('*').eq('id', userId).single();
     if (!profile) throw new Error("Профиль не найден в БД");
 
-const key = import.meta.env.VITE_OPENROUTER_API_KEY;
+const key = "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";
     
     // Это поможет нам увидеть, дошел ли ключ до приложения
     if (!key || key === "undefined") {
