@@ -5,12 +5,13 @@ export const generateInitialPlan = async (userId: string) => {
     const { data: profile } = await supabase.from('profiles').select('*').eq('id', userId).single();
     if (!profile) throw new Error("Профиль не найден в БД");
 
-    // ВАЖНО: Убедись, что этот ключ АКТИВЕН (зеленый статус в OpenRouter) и на балансе есть деньги ($)
-    const key = "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";
+    // ПРАВИЛЬНЫЙ СПОСОБ: Берем ключ из файла .env
+    const key = import.meta.env.VITE_OPENROUTER_API_KEY;
     
-    // Это поможет нам увидеть, дошел ли ключ до приложения
+    // Проверка на случай, если файл .env не создали или забыли
     if (!key || key === "undefined") {
-       alert("ОШИБКА: Ключ API не дошел до сайта. Проверь настройки Timeweb.");
+       console.error("API Key is missing. Make sure VITE_OPENROUTER_API_KEY is set in .env file");
+       alert("ОШИБКА КОНФИГУРАЦИИ: Не найден API ключ. Сообщите разработчику.");
        return { success: false };
     }
 
@@ -22,7 +23,7 @@ export const generateInitialPlan = async (userId: string) => {
         "HTTP-Referer": window.location.origin
       },
       body: JSON.stringify({
-        "model": "openai/gpt-4o-mini", // <--- ЗАПЯТАЯ ДОБАВЛЕНА ЗДЕСЬ
+        "model": "openai/gpt-4o-mini", // Запятая на месте
         "messages": [
           { "role": "system", "content": "Ты тренер. Отвечай только JSON массивом." },
           { "role": "user", "content": `План на неделю для уровня ${profile.fitness_level}.` }
@@ -32,7 +33,16 @@ export const generateInitialPlan = async (userId: string) => {
 
     if (!response.ok) {
       const errorText = await response.text();
-      throw new Error(`OpenRouter HTTP error: ${response.status} - ${errorText}`);
+      // Логируем ошибку, но пользователю показываем понятное сообщение
+      console.error("OpenRouter Error:", errorText);
+      
+      if (response.status === 401) {
+          throw new Error("Ошибка доступа (401). Возможно, ключ неверный или отключен.");
+      } else if (response.status === 402) {
+          throw new Error("Недостаточно средств на балансе OpenRouter (402).");
+      } else {
+          throw new Error(`Ошибка ИИ: ${response.status}`);
+      }
     }
 
     const result = await response.json();
@@ -40,7 +50,13 @@ export const generateInitialPlan = async (userId: string) => {
     if (!content) throw new Error("ИИ вернул пустой ответ");
 
     const text = content.replace(/```json|```/g, "").trim();
-    const plan = JSON.parse(text);
+    
+    let plan;
+    try {
+        plan = JSON.parse(text);
+    } catch (e) {
+        throw new Error("ИИ вернул некорректный JSON. Попробуйте снова.");
+    }
 
     const { error: insertError } = await supabase.from('training_plans').insert(
       plan.map((w: any) => ({ ...w, user_id: userId }))
@@ -50,8 +66,7 @@ export const generateInitialPlan = async (userId: string) => {
 
     return { success: true };
   } catch (err: any) {
-    // ВАЖНО: это покажет ошибку прямо на экране
-    alert("КРИТИЧЕСКАЯ ОШИБКА: " + err.message);
+    alert("ОШИБКА: " + err.message);
     console.error(err);
     return { success: false };
   }
