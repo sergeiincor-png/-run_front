@@ -5,7 +5,7 @@ export const generateInitialPlan = async (userId: string) => {
     const { data: profile } = await supabase.from('profiles').select('*').eq('id', userId).single();
     if (!profile) throw new Error("Профиль не найден в БД");
 
-const key = "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";
+const key = "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";
     
     // Это поможет нам увидеть, дошел ли ключ до приложения
     if (!key || key === "undefined") {
