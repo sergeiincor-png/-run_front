@@ -5,18 +5,26 @@ export const generateInitialPlan = async (userId: string) => {
     const { data: profile } = await supabase.from('profiles').select('*').eq('id', userId).single();
     if (!profile) throw new Error("Профиль не найден в БД");
 
+const key = import.meta.env.VITE_OPENROUTER_API_KEY;
+    
+    // Это поможет нам увидеть, дошел ли ключ до приложения
+    if (!key || key === "undefined") {
+       alert("ОШИБКА: Ключ API не дошел до сайта. Проверь настройки Timeweb.");
+       return { success: false };
+    }
+
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${import.meta.env.VITE_OPENROUTER_API_KEY}`,
+        "Authorization": `Bearer ${key.trim()}`,
         "Content-Type": "application/json",
         "HTTP-Referer": window.location.origin
       },
       body: JSON.stringify({
         "model": "google/gemini-flash-1.5",
         "messages": [
-          { "role": "system", "content": "Ты тренер. Отвечай ТОЛЬКО чистым JSON массивом." },
-          { "role": "user", "content": `План на 7 дней, уровень ${profile.fitness_level}, цель ${profile.goal_distance_km}км. Формат: [{"scheduled_date": "2026-01-10", "workout_type": "бег", "target_distance_km": 5, "target_pace": "6:00", "description": "тест"}]` }
+          { "role": "system", "content": "Ты тренер. Отвечай только JSON массивом." },
+          { "role": "user", "content": `План на неделю для уровня ${profile.fitness_level}.` }
         ]
       })
     });
