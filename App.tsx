@@ -1,25 +1,42 @@
-
 import React, { useState, useEffect } from 'react';
 import { supabase } from './supabaseClient';
 import LandingPage from './components/LandingPage';
 import Dashboard from './components/Dashboard';
+import Onboarding from './components/Onboarding';
 import { Loader2 } from 'lucide-react';
 
 const App: React.FC = () => {
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [showOnboarding, setShowOnboarding] = useState(false);
 
   useEffect(() => {
-    // Проверка текущей сессии при загрузке
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
-      setLoading(false);
-    });
+    const checkUser = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      const currentUser = session?.user ?? null;
+      setUser(currentUser);
 
-    // Слушатель изменений состояния авторизации
+      if (currentUser) {
+        // Проверяем, есть ли уже профиль в базе
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', currentUser.id)
+          .single();
+
+        // Если профиля нет или не заполнена цель — показываем онбординг
+        if (!profile || !profile.fitness_level) {
+          setShowOnboarding(true);
+        }
+      }
+      setLoading(false);
+    };
+
+    checkUser();
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
-      setLoading(false);
+      if (!session) setShowOnboarding(false);
     });
 
     return () => subscription.unsubscribe();
@@ -28,23 +45,16 @@ const App: React.FC = () => {
   if (loading) {
     return (
       <div className="min-h-screen bg-[#09090b] flex flex-col items-center justify-center gap-4">
-        <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center font-bold italic text-white text-2xl shadow-xl animate-bounce">RC</div>
         <Loader2 className="animate-spin text-blue-500" size={32} />
-        <span className="text-slate-500 text-xs font-bold uppercase tracking-[0.3em] animate-pulse">Загрузка системы...</span>
       </div>
     );
   }
 
-  // Роутинг на основе состояния авторизации
-  return (
-    <div className="min-h-screen bg-[#09090b]">
-      {user ? (
-        <Dashboard user={user} />
-      ) : (
-        <LandingPage />
-      )}
-    </div>
-  );
+  // Логика переключения экранов
+  if (!user) return <LandingPage />;
+  if (showOnboarding) return <Onboarding userId={user.id} onComplete={() => setShowOnboarding(false)} />;
+  
+  return <Dashboard user={user} />;
 };
 
 export default App;
