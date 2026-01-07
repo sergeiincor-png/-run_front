@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { supabase } from '../supabaseClient';
 import { Trophy, Target, Calendar, ChevronRight, Loader2 } from 'lucide-react';
+// ВАЖНО: Добавляем импорт ИИ-сервиса
+import { generateInitialPlan } from '../services/aiCoach';
 
 interface OnboardingProps {
   onComplete: () => void;
@@ -22,7 +24,6 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete, userId }) => {
 
     setIsSaving(true);
     
-    // Формируем данные БЕЗ updated_at, чтобы не провоцировать ошибку 400
     const profileData = {
       id: userId,
       fitness_level: level,
@@ -30,21 +31,26 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete, userId }) => {
       target_race_date: date
     };
 
-    console.log("Попытка сохранения данных:", profileData);
+    console.log("Попытка сохранения данных профиля:", profileData);
 
     try {
-      // Используем upsert для создания или обновления записи
+      // 1. Сохраняем данные профиля в Supabase
       const { error } = await supabase
         .from('profiles')
         .upsert(profileData, { onConflict: 'id' });
 
       if (error) throw error;
       
-      console.log("Профиль успешно сохранен!");
-      onComplete(); // Переходим в Dashboard
+      console.log("Профиль сохранен. Запускаем ИИ для генерации плана...");
+
+      // 2. ЗАПУСКАЕМ ИИ-ТРЕНЕРА (та самая магия)
+      await generateInitialPlan(userId); 
+
+      // 3. Закрываем онбординг и переходим в Dashboard
+      onComplete(); 
     } catch (error: any) {
-      console.error("Ошибка сохранения:", error.message);
-      alert(`Ошибка базы данных: ${error.message}`);
+      console.error("Ошибка:", error.message);
+      alert(`Ошибка: ${error.message}`);
     } finally {
       setIsSaving(false);
     }
