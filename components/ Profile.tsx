@@ -1,7 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
 import { 
-  User, Activity, Save, ArrowLeft, Link as LinkIcon, LogOut, CheckCircle2 
+  User, 
+  Activity, 
+  Save, 
+  ArrowLeft, 
+  Link as LinkIcon, 
+  LogOut, 
+  CheckCircle2,
+  AlertCircle
 } from 'lucide-react';
 
 interface ProfileProps {
@@ -12,10 +19,10 @@ interface ProfileProps {
 const Profile: React.FC<ProfileProps> = ({ session, onBack }) => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [saveSuccess, setSaveSuccess] = useState(false);
-  
-  // Состояние формы
-  const [formData, setFormData] = useState({
+  const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+
+  // Состояние полей профиля
+  const [profile, setProfile] = useState({
     first_name: '',
     last_name: '',
     height: '',
@@ -26,241 +33,224 @@ const Profile: React.FC<ProfileProps> = ({ session, onBack }) => {
     garmin_connected: false
   });
 
-  // Загрузка данных при открытии
   useEffect(() => {
-    const getProfile = async () => {
-      try {
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', session.user.id)
-          .single();
-
-        if (error && error.code !== 'PGRST116') throw error;
-
-        if (data) {
-          setFormData({
-            first_name: data.first_name || '',
-            last_name: data.last_name || '',
-            height: data.height || '',
-            weight: data.weight || '',
-            max_hr: data.max_hr || '',
-            threshold_hr: data.threshold_hr || '',
-            strava_connected: data.strava_connected || false,
-            garmin_connected: data.garmin_connected || false,
-          });
-        }
-      } catch (error: any) {
-        console.error('Ошибка загрузки:', error.message);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     getProfile();
   }, [session]);
 
-  // Сохранение данных
-  const updateProfile = async () => {
-    setSaving(true);
-    setSaveSuccess(false);
+  // Загрузка данных профиля из Supabase
+  async function getProfile() {
     try {
+      setLoading(true);
+      const { user } = session;
+
+      const { data, error, status } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single();
+
+      if (error && status !== 406) {
+        throw error;
+      }
+
+      if (data) {
+        setProfile({
+          first_name: data.first_name || '',
+          last_name: data.last_name || '',
+          height: data.height || '',
+          weight: data.weight || '',
+          max_hr: data.max_hr || '',
+          threshold_hr: data.threshold_hr || '',
+          strava_connected: data.strava_connected || false,
+          garmin_connected: data.garmin_connected || false
+        });
+      }
+    } catch (error: any) {
+      console.error('Ошибка загрузки профиля:', error.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // Обновление данных профиля
+  async function updateProfile(e: React.FormEvent) {
+    e.preventDefault();
+    try {
+      setSaving(true);
+      setMessage(null);
+      const { user } = session;
+
       const updates = {
-        id: session.user.id,
-        ...formData,
-        updated_at: new Date(),
+        id: user.id,
+        ...profile,
+        updated_at: new Date().toISOString(),
       };
 
       const { error } = await supabase.from('profiles').upsert(updates);
+
       if (error) throw error;
       
-      setSaveSuccess(true);
-      setTimeout(() => setSaveSuccess(false), 3000);
+      setMessage({ type: 'success', text: 'Профиль успешно обновлен!' });
+      setTimeout(() => setMessage(null), 3000);
     } catch (error: any) {
-      console.error('Ошибка:', error.message);
+      setMessage({ type: 'error', text: error.message });
     } finally {
       setSaving(false);
     }
-  };
-
-  // Имитация подключения сервисов
-  const toggleService = (service: 'strava_connected' | 'garmin_connected') => {
-    setFormData(prev => ({ ...prev, [service]: !prev[service] }));
-  };
-
-  const handleSignOut = async () => {
-    await supabase.auth.signOut();
-    window.location.reload();
-  };
+  }
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#09090b] flex items-center justify-center text-white">
-        <Activity className="animate-spin text-blue-600 mb-2" size={32} />
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <Activity className="animate-spin text-blue-500" size={40} />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#09090b] text-white p-4 md:p-8 font-sans animate-in fade-in duration-500">
-      
-      {/* Шапка */}
-      <div className="max-w-4xl mx-auto flex items-center justify-between mb-8 pb-6 border-b border-white/10">
-        <button 
-          onClick={onBack} 
-          className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors bg-white/5 px-4 py-2 rounded-xl hover:bg-white/10"
-        >
-          <ArrowLeft size={18} /> 
-          <span className="font-bold text-sm">Назад</span>
-        </button>
-        <button 
-          onClick={handleSignOut} 
-          className="flex items-center gap-2 text-red-400 hover:text-red-300 px-4 py-2 rounded-xl hover:bg-red-500/10 transition-colors"
-        >
-          <LogOut size={18} /> 
-          <span className="font-bold text-sm">Выйти</span>
-        </button>
-      </div>
-
-      <div className="max-w-4xl mx-auto space-y-6">
+    <div className="min-h-screen bg-[#09090b] text-white font-sans p-4 md:p-8">
+      <div className="max-w-4xl mx-auto">
         
-        {/* Блок 1: Личные данные */}
-        <div className="bg-[#111] border border-white/5 rounded-3xl p-6 md:p-8 shadow-xl">
-          <div className="flex items-center gap-4 mb-8">
-            <div className="w-16 h-16 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-900/20">
-              <User size={32} className="text-white" />
-            </div>
-            <div>
-              <h2 className="text-2xl font-black italic tracking-tight">ПРОФИЛЬ АТЛЕТА</h2>
-              <p className="text-slate-500 text-sm font-medium">{session.user.email}</p>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-2">
-              <label className="text-[10px] uppercase font-black text-slate-500 tracking-widest ml-1">Имя</label>
-              <input 
-                type="text" 
-                value={formData.first_name}
-                onChange={(e) => setFormData({...formData, first_name: e.target.value})}
-                className="w-full bg-black/50 border border-white/10 rounded-xl p-4 focus:border-blue-500 outline-none transition-all text-white font-bold placeholder:text-slate-700"
-                placeholder="Имя"
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-[10px] uppercase font-black text-slate-500 tracking-widest ml-1">Фамилия</label>
-              <input 
-                type="text" 
-                value={formData.last_name}
-                onChange={(e) => setFormData({...formData, last_name: e.target.value})}
-                className="w-full bg-black/50 border border-white/10 rounded-xl p-4 focus:border-blue-500 outline-none transition-all text-white font-bold placeholder:text-slate-700"
-                placeholder="Фамилия"
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Блок 2: Метрики */}
-        <div className="bg-[#111] border border-white/5 rounded-3xl p-6 md:p-8 shadow-xl">
-          <div className="flex items-center gap-3 mb-6 pb-4 border-b border-white/5">
-            <Activity className="text-blue-500" size={24} />
-            <h3 className="font-black uppercase tracking-widest text-lg">Физические метрики</h3>
-          </div>
-          
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {[
-              { label: 'Рост (см)', key: 'height', placeholder: '175', color: 'text-blue-400' },
-              { label: 'Вес (кг)', key: 'weight', placeholder: '70', color: 'text-blue-400' },
-              { label: 'Макс. пульс', key: 'max_hr', placeholder: '190', color: 'text-red-400' },
-              { label: 'ПАНО', key: 'threshold_hr', placeholder: '170', color: 'text-orange-400' }
-            ].map((field) => (
-              <div key={field.key} className="bg-black/40 p-4 rounded-2xl border border-white/5 hover:border-white/10 transition-colors">
-                <label className={`text-[10px] uppercase font-black ${field.color} block mb-2 tracking-wider`}>{field.label}</label>
-                <input 
-                  type="number" 
-                  value={(formData as any)[field.key]}
-                  onChange={(e) => setFormData({...formData, [field.key]: e.target.value})}
-                  className="w-full bg-transparent text-2xl font-black outline-none placeholder:text-slate-800"
-                  placeholder={field.placeholder}
-                />
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Блок 3: Интеграции */}
-        <div className="bg-[#111] border border-white/5 rounded-3xl p-6 md:p-8 shadow-xl">
-          <div className="flex items-center gap-3 mb-6 pb-4 border-b border-white/5">
-            <LinkIcon className="text-emerald-500" size={24} />
-            <h3 className="font-black uppercase tracking-widest text-lg">Подключения</h3>
-          </div>
-
-          <div className="grid md:grid-cols-2 gap-4">
-            {/* Strava */}
-            <div className={`p-6 rounded-2xl border transition-all duration-300 ${formData.strava_connected ? 'bg-orange-500/10 border-orange-500/30' : 'bg-black/40 border-white/5 hover:border-white/10'}`}>
-              <div className="flex justify-between items-start mb-4">
-                <span className={`font-black text-xl italic tracking-tighter ${formData.strava_connected ? 'text-orange-500' : 'text-slate-500'}`}>STRAVA</span>
-                <div className={`w-3 h-3 rounded-full ${formData.strava_connected ? 'bg-orange-500 animate-pulse' : 'bg-slate-800'}`} />
-              </div>
-              <button 
-                onClick={() => toggleService('strava_connected')}
-                className={`w-full py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${
-                  formData.strava_connected 
-                    ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/20 hover:bg-orange-600' 
-                    : 'bg-white/5 text-slate-400 hover:bg-white/10 hover:text-white'
-                }`}
-              >
-                {formData.strava_connected ? 'Подключено' : 'Подключить'}
-              </button>
-            </div>
-
-            {/* Garmin */}
-            <div className={`p-6 rounded-2xl border transition-all duration-300 ${formData.garmin_connected ? 'bg-blue-500/10 border-blue-500/30' : 'bg-black/40 border-white/5 hover:border-white/10'}`}>
-              <div className="flex justify-between items-start mb-4">
-                <span className={`font-black text-xl italic tracking-tighter ${formData.garmin_connected ? 'text-blue-500' : 'text-slate-500'}`}>GARMIN</span>
-                <div className={`w-3 h-3 rounded-full ${formData.garmin_connected ? 'bg-blue-500 animate-pulse' : 'bg-slate-800'}`} />
-              </div>
-              <button 
-                onClick={() => toggleService('garmin_connected')}
-                className={`w-full py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${
-                  formData.garmin_connected 
-                    ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/20 hover:bg-blue-600' 
-                    : 'bg-white/5 text-slate-400 hover:bg-white/10 hover:text-white'
-                }`}
-              >
-                {formData.garmin_connected ? 'Подключено' : 'Подключить'}
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Кнопка сохранения */}
-        <div className="sticky bottom-6 pt-4">
+        {/* Шапка профиля */}
+        <div className="flex justify-between items-center mb-12">
           <button 
-            onClick={updateProfile}
-            disabled={saving}
-            className={`w-full py-5 rounded-2xl font-black text-lg transition-all flex items-center justify-center gap-3 shadow-2xl ${
-              saveSuccess 
-                ? 'bg-emerald-500 text-white scale-[1.02]' 
-                : 'bg-white text-black hover:bg-slate-200 active:scale-95'
-            }`}
+            onClick={onBack}
+            className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors group"
           >
-            {saving ? (
-              <>
-                <Activity className="animate-spin" size={24} /> Сохранение...
-              </>
-            ) : saveSuccess ? (
-              <>
-                <CheckCircle2 size={24} /> Сохранено!
-              </>
-            ) : (
-              <>
-                <Save size={24} /> Сохранить изменения
-              </>
-            )}
+            <ArrowLeft size={20} className="group-hover:-translate-x-1 transition-transform" />
+            <span className="font-bold uppercase text-xs tracking-widest">Назад к плану</span>
+          </button>
+          
+          <button 
+            onClick={() => supabase.auth.signOut()}
+            className="flex items-center gap-2 text-red-500/70 hover:text-red-500 transition-colors"
+          >
+            <LogOut size={18} />
+            <span className="font-bold uppercase text-xs tracking-widest">Выйти</span>
           </button>
         </div>
 
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-12">
+          
+          {/* Левая колонка: Аватар и Статус */}
+          <div className="space-y-6">
+            <div className="bg-[#111] border border-white/5 rounded-3xl p-8 text-center relative overflow-hidden">
+              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-600 to-indigo-600"></div>
+              <div className="w-24 h-24 bg-gradient-to-br from-zinc-700 to-zinc-900 rounded-2xl mx-auto mb-4 flex items-center justify-center border border-white/10 shadow-2xl">
+                <User size={48} className="text-white/20" />
+              </div>
+              <h3 className="text-xl font-black italic uppercase tracking-tight">
+                {profile.first_name || 'Атлет'}
+              </h3>
+              <p className="text-blue-500 text-[10px] font-black uppercase tracking-[0.2em] mt-1">Уровень: Новичок</p>
+            </div>
+
+            <div className="bg-[#111] border border-white/5 rounded-3xl p-6 space-y-4">
+              <h4 className="text-[10px] font-black uppercase text-slate-500 tracking-widest mb-4">Интеграции</h4>
+              <div className="flex items-center justify-between p-3 bg-black/40 rounded-xl border border-white/5">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 bg-[#fc4c02] rounded-lg flex items-center justify-center">
+                    <LinkIcon size={16} />
+                  </div>
+                  <span className="text-sm font-bold">Strava</span>
+                </div>
+                {profile.strava_connected ? <CheckCircle2 className="text-green-500" size={18} /> : <button className="text-[10px] font-black text-blue-500 uppercase">Подключить</button>}
+              </div>
+            </div>
+          </div>
+
+          {/* Правая колонка: Форма настроек */}
+          <div className="md:col-span-2">
+            <form onSubmit={updateProfile} className="space-y-8">
+              
+              <section>
+                <h3 className="text-lg font-black italic uppercase mb-6 flex items-center gap-3">
+                  <span className="w-1 h-6 bg-blue-600"></span> Личные данные
+                </h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase text-slate-500 ml-1">Имя</label>
+                    <input 
+                      type="text" 
+                      value={profile.first_name}
+                      onChange={(e) => setProfile({...profile, first_name: e.target.value})}
+                      className="w-full bg-[#111] border border-white/5 rounded-xl px-4 py-3 focus:border-blue-600 outline-none transition-all font-bold" 
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase text-slate-500 ml-1">Фамилия</label>
+                    <input 
+                      type="text" 
+                      value={profile.last_name}
+                      onChange={(e) => setProfile({...profile, last_name: e.target.value})}
+                      className="w-full bg-[#111] border border-white/5 rounded-xl px-4 py-3 focus:border-blue-600 outline-none transition-all font-bold" 
+                    />
+                  </div>
+                </div>
+              </section>
+
+              <section>
+                <h3 className="text-lg font-black italic uppercase mb-6 flex items-center gap-3">
+                  <span className="w-1 h-6 bg-blue-600"></span> Физические параметры
+                </h3>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase text-slate-500 ml-1">Рост (см)</label>
+                    <input 
+                      type="number" 
+                      value={profile.height}
+                      onChange={(e) => setProfile({...profile, height: e.target.value})}
+                      className="w-full bg-[#111] border border-white/5 rounded-xl px-4 py-3 focus:border-blue-600 outline-none transition-all font-bold" 
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase text-slate-500 ml-1">Вес (кг)</label>
+                    <input 
+                      type="number" 
+                      value={profile.weight}
+                      onChange={(e) => setProfile({...profile, weight: e.target.value})}
+                      className="w-full bg-[#111] border border-white/5 rounded-xl px-4 py-3 focus:border-blue-600 outline-none transition-all font-bold" 
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase text-slate-500 ml-1">Макс. ЧСС</label>
+                    <input 
+                      type="number" 
+                      value={profile.max_hr}
+                      onChange={(e) => setProfile({...profile, max_hr: e.target.value})}
+                      className="w-full bg-[#111] border border-white/5 rounded-xl px-4 py-3 focus:border-blue-600 outline-none transition-all font-bold" 
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase text-slate-500 ml-1">Порог ЧСС</label>
+                    <input 
+                      type="number" 
+                      value={profile.threshold_hr}
+                      onChange={(e) => setProfile({...profile, threshold_hr: e.target.value})}
+                      className="w-full bg-[#111] border border-white/5 rounded-xl px-4 py-3 focus:border-blue-600 outline-none transition-all font-bold" 
+                    />
+                  </div>
+                </div>
+              </section>
+
+              {message && (
+                <div className={`p-4 rounded-xl flex items-center gap-3 font-bold text-sm ${message.type === 'success' ? 'bg-green-500/10 text-green-500 border border-green-500/20' : 'bg-red-500/10 text-red-500 border border-red-500/20'}`}>
+                  {message.type === 'success' ? <CheckCircle2 size={18} /> : <AlertCircle size={18} />}
+                  {message.text}
+                </div>
+              )}
+
+              <button 
+                type="submit" 
+                disabled={saving}
+                className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 disabled:opacity-50 text-white font-black uppercase py-4 rounded-2xl shadow-xl shadow-blue-900/20 transition-all flex items-center justify-center gap-3 tracking-widest"
+              >
+                {saving ? <Activity className="animate-spin" size={20} /> : <Save size={20} />}
+                Сохранить изменения
+              </button>
+            </form>
+          </div>
+        </div>
       </div>
     </div>
   );
