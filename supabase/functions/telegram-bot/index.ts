@@ -6,15 +6,14 @@ const TELEGRAM_BOT_TOKEN = Deno.env.get('TELEGRAM_BOT_TOKEN')!
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 
-// БЕСПЛАТНАЯ МОДЕЛЬ
-const AI_MODEL = "openai/gpt-4o-mini"
+// Можно использовать Gemini 2.0 Flash через OpenRouter для лучшего зрения
+const AI_MODEL = "google/gemini-2.0-flash-001" 
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
-// ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ (В НАЧАЛЕ ФАЙЛА)
 const sendTelegramMessage = async (chatId: number, text: string) => {
   try {
-    const response = await fetch(
+    await fetch(
       `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`,
       {
         method: 'POST',
@@ -26,7 +25,6 @@ const sendTelegramMessage = async (chatId: number, text: string) => {
         }),
       }
     )
-    return await response.json()
   } catch (err) {
     console.error("Failed to send Telegram message:", err)
   }
@@ -37,20 +35,12 @@ Deno.serve(async (req) => {
     const update = await req.json()
     const message = update.message
 
-    // 1. ИГНОРИРУЕМ ВСЁ ЛИШНЕЕ
-    if (!message || !message.chat) {
-      return new Response('No message found', { status: 200 })
-    }
-
-    // 🛑 ЗАЩИТА ОТ БЕСКОНЕЧНОГО ЦИКЛА 🛑
-    // Если сообщение от бота (в т.ч. от самого себя) — игнорируем
-    if (message.from && message.from.is_bot) {
-      return new Response('Ignored bot message', { status: 200 })
-    }
+    if (!message || !message.chat) return new Response('OK', { status: 200 })
+    if (message.from?.is_bot) return new Response('OK', { status: 200 })
 
     const chatId = message.chat.id
 
-    // 2. АВТОРИЗАЦИЯ
+    // АВТОРИЗАЦИЯ
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
       .select('id')
@@ -58,35 +48,27 @@ Deno.serve(async (req) => {
       .single()
 
     if (profileError || !profile) {
-      await sendTelegramMessage(chatId, "⛔️ Вы не зарегистрированы. Пожалуйста, создайте аккаунт на сайте.")
-      return new Response('User not found', { status: 200 })
+      await sendTelegramMessage(chatId, "⛔️ Вы не зарегистрированы. Привяжите Telegram в профиле на сайте.")
+      return new Response('OK', { status: 200 })
     }
 
-    // 3. ОБРАБОТКА ФОТО
     if (message.photo) {
-      await sendTelegramMessage(chatId, "👀 Смотрю бесплатно через Gemini 2.0...")
+      await sendTelegramMessage(chatId, "⚡️ Анализирую скриншот...")
 
-      // Берем последнее фото (лучшее качество)
       const fileId = message.photo[message.photo.length - 1].file_id
-      
-      // Получаем ссылку
       const getFileRes = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getFile?file_id=${fileId}`)
       const fileData = await getFileRes.json()
       const fileUrl = `https://api.telegram.org/file/bot${TELEGRAM_BOT_TOKEN}/${fileData.result.file_path}`
 
-      // Скачиваем и конвертируем в base64
       const imageRes = await fetch(fileUrl)
-      const imageBlob = await imageRes.blob()
-      const arrayBuffer = await imageBlob.arrayBuffer()
+      const arrayBuffer = await imageRes.blob().then(b => b.arrayBuffer())
       const base64Image = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)))
 
-      // 4. ЗАПРОС К OPENROUTER
+      // ЗАПРОС К ИИ
       const aiResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
         method: "POST",
         headers: {
           "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
-          "HTTP-Referer": "https://run-coach.app",
-          "X-Title": "Run Coach Bot",
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
@@ -97,13 +79,11 @@ Deno.serve(async (req) => {
               "content": [
                 {
                   "type": "text",
-                  "text": "Извлеки данные с фитнес-скриншота в JSON. Поля: activity_date (YYYY-MM-DD), activity_type (тип активности на русском), distance_km (число), duration_minutes (число), calories (число), title (краткое название). Если данных нет, ставь null. Ответь ТОЛЬКО чистым JSON."
+                  "text": "Извлеки данные в JSON: activity_date (YYYY-MM-DD), activity_type (тип на русском), distance_km (число), duration_minutes (число), pace (темп как '5:30'), calories (число), title (кратко). Только чистый JSON, без markdown."
                 },
                 {
                   "type": "image_url",
-                  "image_url": {
-                    "url": `data:image/jpeg;base64,${base64Image}`
-                  }
+                  "image_url": { "url": `data:image/jpeg;base64,${base64Image}` }
                 }
               ]
             }
@@ -112,73 +92,42 @@ Deno.serve(async (req) => {
       })
 
       const aiData = await aiResponse.json()
-      
-      // Обработка ошибок ИИ
-      if (aiData.error) {
-          console.error("OpenRouter Error:", aiData.error)
-          await sendTelegramMessage(chatId, `⚠️ Ошибка ИИ: ${aiData.error.message}`)
-          return new Response('AI Error', { status: 200 })
-      }
+      const content = aiData.choices?.[0]?.message?.content
+      if (!content) throw new Error("AI returned empty content")
 
-      if (!aiData.choices || !aiData.choices[0]) {
-          console.error("AI Empty Response:", aiData)
-          await sendTelegramMessage(chatId, "❌ ИИ вернул пустой ответ.")
-          return new Response('AI Error', { status: 200 })
-      }
-
-      const content = aiData.choices[0].message.content
-      
-      // Чистим JSON
+      // Парсим JSON (убираем возможные теги ```json)
       const cleanJson = content.replace(/```json/g, "").replace(/```/g, "").trim()
-      
-      let workout
-      try {
-          workout = JSON.parse(cleanJson)
-      } catch (e) {
-          console.error("JSON Parse Error:", content)
-          await sendTelegramMessage(chatId, "❌ Не удалось прочитать данные (ошибка JSON).")
-          return new Response('JSON Error', { status: 200 })
-      }
+      const workout = JSON.parse(cleanJson)
 
-      // 5. СОХРАНЕНИЕ В БАЗУ
+      // СОХРАНЕНИЕ
+      // Важно: в поле activity_date кладем только YYYY-MM-DD
+      const dateToSave = workout.activity_date || new Date().toISOString().split('T')[0]
+
       const { error: insertError } = await supabase
         .from('workouts')
         .insert({
           user_id: profile.id,
-          activity_date: workout.activity_date || new Date().toISOString().split('T')[0],
-          activity_type: workout.activity_type || 'Тренировка',
-          distance_km: workout.distance_km || 0,
-          duration_minutes: workout.duration_minutes || 0,
+          activity_date: dateToSave,
+          activity_type: workout.activity_type || 'Бег',
+          activity: workout.activity_type || 'Бег', // Дублируем для совместимости с дашбордом
+          distance_km: parseFloat(workout.distance_km) || 0,
+          duration_minutes: parseInt(workout.duration_minutes) || 0,
+          pace: workout.pace, // Добавляем темп для красивой карточки
           calories: workout.calories || 0,
-          title: workout.title
+          title: workout.title || 'Забег'
         })
 
-      if (insertError) {
-          console.error("DB Error:", insertError)
-          await sendTelegramMessage(chatId, "❌ Ошибка при сохранении в базу.")
-      } else {
-          // УСПЕХ
-          const successMessage = `✅ *Тренировка сохранена!*
+      if (insertError) throw insertError
 
-📋 *${workout.title || 'Без названия'}*
-📅 ${workout.activity_date}
-🏃 ${workout.activity_type}
-📏 ${workout.distance_km} км
-⏱ ${workout.duration_minutes} мин
-🔥 ${workout.calories} ккал`
-          
-          await sendTelegramMessage(chatId, successMessage)
-      }
+      await sendTelegramMessage(chatId, `✅ *Готово!* Тренировка на ${dateToSave} добавлена в календарь.\n📏 ${workout.distance_km} км | ⏱ ${workout.pace || '-'} /км`)
 
     } else {
-      // Это сообщение придет только если пишет человек (благодаря защите выше)
-      await sendTelegramMessage(chatId, "📸 Пришлите мне скриншот вашей тренировки!")
+      await sendTelegramMessage(chatId, "📸 Пришли мне скриншот (Strava, Garmin, Apple Health), и я добавлю его в календарь!")
     }
 
     return new Response('OK', { status: 200 })
-
   } catch (error) {
-    console.error("Global Error:", error)
-    return new Response(JSON.stringify({ error: error.message }), { status: 200 })
+    console.error("Error:", error)
+    return new Response('Error', { status: 200 })
   }
 })
