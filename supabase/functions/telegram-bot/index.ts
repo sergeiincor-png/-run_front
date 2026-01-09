@@ -15,31 +15,25 @@ const sendTelegramMessage = async (chatId: number, text: string) => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ chat_id: chatId, text: text, parse_mode: 'Markdown' }),
     })
-  } catch (err) { console.error("Failed to send Telegram message:", err) }
+  } catch (err) { console.error(err) }
 }
 
 Deno.serve(async (req) => {
   try {
     const update = await req.json()
     const message = update.message
-    if (!message || message.from?.is_bot) return new Response('OK', { status: 200 })
+    if (!message || message.from?.is_bot) return new Response('OK')
 
     const chatId = message.chat.id
+    const { data: profile } = await supabase.from('profiles').select('id').eq('telegram_chat_id', chatId).single()
 
-    const { data: profile, error: profileError } = await supabase
-      .from('profiles')
-      .select('id')
-      .eq('telegram_chat_id', chatId)
-      .single()
-
-    if (profileError || !profile) {
-      await sendTelegramMessage(chatId, "⛔️ Вы не зарегистрированы. Пожалуйста, создайте аккаунт на сайте.")
-      return new Response('User not found', { status: 200 })
+    if (!profile) {
+      await sendTelegramMessage(chatId, "⛔️ Вы не зарегистрированы.")
+      return new Response('User not found')
     }
 
     if (message.photo) {
       await sendTelegramMessage(chatId, "👀 Анализирую скриншот...")
-
       const fileId = message.photo[message.photo.length - 1].file_id
       const getFileRes = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getFile?file_id=${fileId}`)
       const fileData = await getFileRes.json()
@@ -52,16 +46,13 @@ Deno.serve(async (req) => {
 
       const aiResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
         method: "POST",
-        headers: {
-          "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
-          "Content-Type": "application/json"
-        },
+        headers: { "Authorization": `Bearer ${OPENROUTER_API_KEY}`, "Content-Type": "application/json" },
         body: JSON.stringify({
           "model": AI_MODEL,
           "messages": [{
             "role": "user",
             "content": [
-              { "type": "text", "text": "Извлеки данные в JSON: activity_date (YYYY-MM-DD), activity_type, distance_km (number), duration_minutes (number), pace (string), title. Верни ТОЛЬКО чистый JSON." },
+              { "type": "text", "text": "Извлеки в JSON: activity_date (YYYY-MM-DD), activity_type, distance_km (number), duration_minutes (number), calories (number), title. Верни ТОЛЬКО JSON." },
               { "type": "image_url", "image_url": { "url": `data:image/jpeg;base64,${base64Image}` } }
             ]
           }]
@@ -69,30 +60,22 @@ Deno.serve(async (req) => {
       })
 
       const aiData = await aiResponse.json()
-      const content = aiData.choices[0].message.content
-      const cleanJson = content.replace(/```json/g, "").replace(/```/g, "").trim()
-      const workout = JSON.parse(cleanJson)
+      const workout = JSON.parse(aiData.choices[0].message.content.replace(/```json|```/g, "").trim())
 
-      // СОХРАНЕНИЕ С ПОЛЕМ SOURCE: 'FACT'
-      const { error: insertError } = await supabase
-        .from('workouts')
-        .insert({
-          user_id: profile.id,
-          activity_date: workout.activity_date || new Date().toISOString().split('T')[0],
-          activity_type: workout.activity_type || 'Бег',
-          distance_km: workout.distance_km || 0,
-          duration_minutes: workout.duration_minutes || 0,
-          pace: workout.pace || "",
-          title: workout.title || "Тренировка из ТГ",
-          source: 'FACT' // Обязательно для календаря
-        })
+      // СОХРАНЕНИЕ С ИСПРАВЛЕННЫМИ ПОЛЯМИ
+      await supabase.from('workouts').insert({
+        user_id: profile.id,
+        activity_date: workout.activity_date || new Date().toISOString().split('T')[0],
+        activity_type: workout.activity_type,
+        distance_km: workout.distance_km,
+        duration_minutes: workout.duration_minutes,
+        calories: workout.calories,
+        title: workout.title,
+        source: 'FACT' // <--- Добавили источник
+      })
 
-      if (insertError) {
-          await sendTelegramMessage(chatId, "❌ Ошибка при сохранении.")
-      } else {
-          await sendTelegramMessage(chatId, `✅ *Сохранено!* \n🏃 ${workout.distance_km} км за ${workout.duration_minutes} мин`)
-      }
+      await sendTelegramMessage(chatId, `✅ Сохранено: ${workout.distance_km} км`)
     }
-    return new Response('OK', { status: 200 })
-  } catch (error) { return new Response('Error', { status: 200 }) }
+    return new Response('OK')
+  } catch (e) { return new Response('Error') }
 })
