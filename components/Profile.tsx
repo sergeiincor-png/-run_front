@@ -29,6 +29,7 @@ const Profile: React.FC<ProfileProps> = ({ session, onBack }) => {
     strava_connected: false,
     garmin_connected: false
   });
+  
 
   useEffect(() => {
     getProfile();
