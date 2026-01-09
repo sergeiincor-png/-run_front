@@ -16,7 +16,7 @@ const Profile: React.FC<ProfileProps> = ({ session, onBack }) => {
   const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
-  // Все поля восстановлены
+  // Состояние со ВСЕМИ полями: личные данные, цели и физиология
   const [profile, setProfile] = useState({
     first_name: '',
     last_name: '',
@@ -70,6 +70,7 @@ const Profile: React.FC<ProfileProps> = ({ session, onBack }) => {
     }
   }
 
+  // Загрузка фотографии
   async function uploadAvatar(event: React.ChangeEvent<HTMLInputElement>) {
     try {
       setUploading(true);
@@ -78,22 +79,22 @@ const Profile: React.FC<ProfileProps> = ({ session, onBack }) => {
       const file = event.target.files[0];
       const fileExt = file.name.split('.').pop();
       const fileName = `${session.user.id}-${Math.random()}.${fileExt}`;
-      const filePath = `${fileName}`;
 
       const { error: uploadError } = await supabase.storage
         .from('avatars')
-        .upload(filePath, file);
+        .upload(fileName, file);
 
       if (uploadError) throw uploadError;
 
       const { data: { publicUrl } } = supabase.storage
         .from('avatars')
-        .getPublicUrl(filePath);
+        .getPublicUrl(fileName);
 
       setProfile(prev => ({ ...prev, avatar_url: publicUrl }));
+      // Сразу сохраняем в профиль
       await supabase.from('profiles').update({ avatar_url: publicUrl }).eq('id', session.user.id);
       
-      setMessage({ type: 'success', text: 'Фото обновлено!' });
+      setMessage({ type: 'success', text: 'Фото загружено!' });
     } catch (error: any) {
       setMessage({ type: 'error', text: 'Ошибка загрузки фото' });
     } finally {
@@ -107,6 +108,7 @@ const Profile: React.FC<ProfileProps> = ({ session, onBack }) => {
       setSaving(true);
       setMessage(null);
 
+      // Конвертируем типы данных, чтобы база не ругалась (Ошибка 400)
       const updates = {
         id: session.user.id,
         first_name: profile.first_name,
@@ -125,7 +127,7 @@ const Profile: React.FC<ProfileProps> = ({ session, onBack }) => {
 
       if (error) throw error;
       
-      setMessage({ type: 'success', text: 'Данные успешно сохранены!' });
+      setMessage({ type: 'success', text: 'Профиль сохранен!' });
       setTimeout(() => setMessage(null), 3000);
     } catch (error: any) {
       console.error('Ошибка сохранения:', error);
@@ -136,13 +138,14 @@ const Profile: React.FC<ProfileProps> = ({ session, onBack }) => {
   }
 
   if (loading) {
-    return <div className="min-h-screen bg-[#09090b] flex items-center justify-center"><Activity className="animate-spin text-blue-500" size={40} /></div>;
+    return <div className="min-h-screen bg-black flex items-center justify-center"><Activity className="animate-spin text-blue-500" size={40} /></div>;
   }
 
   return (
     <div className="min-h-screen bg-[#09090b] text-white font-sans p-4 md:p-8">
       <div className="max-w-4xl mx-auto">
         
+        {/* Navigation */}
         <div className="flex justify-between items-center mb-12">
           <button onClick={onBack} className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors group">
             <ArrowLeft size={20} className="group-hover:-translate-x-1 transition-transform" />
@@ -150,13 +153,13 @@ const Profile: React.FC<ProfileProps> = ({ session, onBack }) => {
           </button>
           <button onClick={() => supabase.auth.signOut()} className="flex items-center gap-2 text-red-500/70 hover:text-red-500 transition-colors">
             <LogOut size={18} />
-            <span className="font-bold uppercase text-xs tracking-widest">Выйти</span>
+            <span className="font-bold uppercase text-xs tracking-widest text-white">Выйти</span>
           </button>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-12">
           
-          {/* Левая панель с фото */}
+          {/* Avatar and Info Sidebar */}
           <div className="space-y-6">
             <div className="bg-[#111] border border-white/5 rounded-3xl p-8 text-center relative overflow-hidden">
               <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-600 to-indigo-600"></div>
@@ -169,7 +172,7 @@ const Profile: React.FC<ProfileProps> = ({ session, onBack }) => {
                     <User size={64} className="text-white/10" />
                   )}
                 </div>
-                <label className="absolute inset-0 flex items-center justify-center bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer rounded-2xl">
+                <label className="absolute inset-0 flex items-center justify-center bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer rounded-2xl border-2 border-dashed border-white/20">
                   <input type="file" className="hidden" accept="image/*" onChange={uploadAvatar} disabled={uploading} />
                   {uploading ? <Activity className="animate-spin text-white" /> : <Camera className="text-white" />}
                 </label>
@@ -181,41 +184,41 @@ const Profile: React.FC<ProfileProps> = ({ session, onBack }) => {
             </div>
           </div>
 
-          {/* Правая панель с формой */}
+          {/* Settings Form */}
           <div className="md:col-span-2">
             <form onSubmit={updateProfile} className="space-y-8">
               
-              {/* Личные данные */}
+              {/* Personal Info Section */}
               <section className="space-y-6">
                 <h3 className="text-lg font-black italic uppercase flex items-center gap-3"><span className="w-1 h-6 bg-blue-600"></span> Личные данные</h3>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <label className="text-[10px] font-black uppercase text-slate-500 ml-1">Имя</label>
-                    <input type="text" value={profile.first_name} onChange={(e) => setProfile({...profile, first_name: e.target.value})} className="w-full bg-[#111] border border-white/5 rounded-xl px-4 py-3 focus:border-blue-600 outline-none font-bold transition-all" />
+                    <input type="text" value={profile.first_name} onChange={(e) => setProfile({...profile, first_name: e.target.value})} className="w-full bg-[#111] border border-white/5 rounded-xl px-4 py-3 focus:border-blue-600 outline-none font-bold" />
                   </div>
                   <div className="space-y-2">
                     <label className="text-[10px] font-black uppercase text-slate-500 ml-1">Фамилия</label>
-                    <input type="text" value={profile.last_name} onChange={(e) => setProfile({...profile, last_name: e.target.value})} className="w-full bg-[#111] border border-white/5 rounded-xl px-4 py-3 focus:border-blue-600 outline-none font-bold transition-all" />
+                    <input type="text" value={profile.last_name} onChange={(e) => setProfile({...profile, last_name: e.target.value})} className="w-full bg-[#111] border border-white/5 rounded-xl px-4 py-3 focus:border-blue-600 outline-none font-bold" />
                   </div>
                 </div>
               </section>
 
-              {/* Цели */}
+              {/* Race Goals Section */}
               <section className="space-y-6">
                 <h3 className="text-lg font-black italic uppercase flex items-center gap-3"><span className="w-1 h-6 bg-indigo-600"></span> Цели забега</h3>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <label className="text-[10px] font-black uppercase text-slate-500 ml-1 flex items-center gap-1"><Target size={10}/> Дистанция (км)</label>
-                    <input type="number" step="0.1" value={profile.goal_distance_km} onChange={(e) => setProfile({...profile, goal_distance_km: e.target.value})} className="w-full bg-[#111] border border-white/5 rounded-xl px-4 py-3 focus:border-indigo-600 outline-none font-bold transition-all" />
+                    <input type="number" step="0.1" value={profile.goal_distance_km} onChange={(e) => setProfile({...profile, goal_distance_km: e.target.value})} className="w-full bg-[#111] border border-white/5 rounded-xl px-4 py-3 focus:border-indigo-600 outline-none font-bold" />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-[10px] font-black uppercase text-slate-500 ml-1 flex items-center gap-1"><CalendarDays size={10}/> Дата старта</label>
-                    <input type="date" value={profile.target_race_date} onChange={(e) => setProfile({...profile, target_race_date: e.target.value})} className="w-full bg-[#111] border border-white/5 rounded-xl px-4 py-3 focus:border-indigo-600 outline-none font-bold text-white [color-scheme:dark] transition-all" />
+                    <label className="text-[10px] font-black uppercase text-slate-500 ml-1 flex items-center gap-1"><CalendarDays size={10}/> Дата забега</label>
+                    <input type="date" value={profile.target_race_date} onChange={(e) => setProfile({...profile, target_race_date: e.target.value})} className="w-full bg-[#111] border border-white/5 rounded-xl px-4 py-3 focus:border-indigo-600 outline-none font-bold text-white [color-scheme:dark]" />
                   </div>
                 </div>
               </section>
 
-              {/* Физиология */}
+              {/* Physiology Section */}
               <section className="space-y-6">
                 <h3 className="text-lg font-black italic uppercase flex items-center gap-3"><span className="w-1 h-6 bg-blue-600"></span> Физиология</h3>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -247,7 +250,7 @@ const Profile: React.FC<ProfileProps> = ({ session, onBack }) => {
 
               <button type="submit" disabled={saving} className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-black uppercase py-4 rounded-2xl shadow-xl shadow-blue-900/20 transition-all flex items-center justify-center gap-3 tracking-widest">
                 {saving ? <Activity className="animate-spin" size={20} /> : <Save size={20} />}
-                Сохранить данные атлета
+                Сохранить все данные
               </button>
             </form>
           </div>
