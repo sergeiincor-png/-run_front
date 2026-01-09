@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
 import { 
   User, Activity, Save, ArrowLeft, LogOut, 
-  CheckCircle2, AlertCircle, Target, CalendarDays, Camera
+  CheckCircle2, AlertCircle, Target, CalendarDays, Camera, Mail, Send
 } from 'lucide-react';
 
 interface ProfileProps {
@@ -25,7 +25,10 @@ const Profile: React.FC<ProfileProps> = ({ session, onBack }) => {
     threshold_hr: '',
     goal_distance_km: '',
     target_race_date: '',
-    avatar_url: ''
+    avatar_url: '',
+    // Новые поля
+    email: '', 
+    telegram_chat_id: ''
   });
 
   useEffect(() => {
@@ -36,6 +39,7 @@ const Profile: React.FC<ProfileProps> = ({ session, onBack }) => {
     try {
       setLoading(true);
       const { user } = session;
+      
       const { data, error, status } = await supabase
         .from('profiles')
         .select('*')
@@ -54,7 +58,10 @@ const Profile: React.FC<ProfileProps> = ({ session, onBack }) => {
           threshold_hr: data.threshold_hr?.toString() || '',
           goal_distance_km: data.goal_distance_km?.toString() || '',
           target_race_date: data.target_race_date || '',
-          avatar_url: data.avatar_url || ''
+          avatar_url: data.avatar_url || '',
+          // Вытаскиваем email из сессии и chat_id из базы
+          email: user.email || '',
+          telegram_chat_id: data.telegram_chat_id?.toString() || ''
         });
       }
     } catch (error: any) {
@@ -64,7 +71,6 @@ const Profile: React.FC<ProfileProps> = ({ session, onBack }) => {
     }
   }
 
-  // Загрузка фото в бакет 'avatars'
   async function uploadAvatar(event: React.ChangeEvent<HTMLInputElement>) {
     try {
       setUploading(true);
@@ -85,7 +91,6 @@ const Profile: React.FC<ProfileProps> = ({ session, onBack }) => {
         .getPublicUrl(fileName);
 
       setProfile(prev => ({ ...prev, avatar_url: publicUrl }));
-      // Сразу обновляем в базе, чтобы не потерять при перезагрузке
       await supabase.from('profiles').update({ avatar_url: publicUrl }).eq('id', session.user.id);
       
       setMessage({ type: 'success', text: 'Фото обновлено!' });
@@ -113,6 +118,8 @@ const Profile: React.FC<ProfileProps> = ({ session, onBack }) => {
         goal_distance_km: profile.goal_distance_km ? parseFloat(profile.goal_distance_km) : null,
         target_race_date: profile.target_race_date || null,
         avatar_url: profile.avatar_url,
+        // Добавляем сохранение Telegram ID
+        telegram_chat_id: profile.telegram_chat_id ? parseInt(profile.telegram_chat_id, 10) : null,
         updated_at: new Date().toISOString(),
       };
 
@@ -145,7 +152,6 @@ const Profile: React.FC<ProfileProps> = ({ session, onBack }) => {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-12">
-          {/* Боковая панель: Фото */}
           <div className="space-y-6">
             <div className="bg-[#111] border border-white/5 rounded-3xl p-8 text-center relative overflow-hidden">
               <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-600 to-indigo-600"></div>
@@ -164,8 +170,8 @@ const Profile: React.FC<ProfileProps> = ({ session, onBack }) => {
                 </label>
               </div>
 
-              <h3 className="text-xl font-black italic uppercase tracking-tight">
-                {profile.first_name} {profile.last_name}
+              <h3 className="text-xl font-black italic uppercase tracking-tight leading-tight">
+                {profile.first_name || 'Спортсмен'} <br/> {profile.last_name}
               </h3>
             </div>
           </div>
@@ -173,6 +179,27 @@ const Profile: React.FC<ProfileProps> = ({ session, onBack }) => {
           <div className="md:col-span-2">
             <form onSubmit={updateProfile} className="space-y-8">
               
+              {/* СЕКЦИЯ: Аккаунт и Связь (НОВАЯ) */}
+              <section className="space-y-6">
+                <h3 className="text-lg font-black italic uppercase flex items-center gap-3"><span className="w-1 h-6 bg-emerald-600"></span> Аккаунт</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase text-slate-500 ml-1 flex items-center gap-1"><Mail size={10}/> Email (логин)</label>
+                    <input type="email" value={profile.email} disabled className="w-full bg-[#050505] border border-white/5 rounded-xl px-4 py-3 outline-none font-bold text-slate-500 cursor-not-allowed" />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase text-slate-500 ml-1 flex items-center gap-1"><Send size={10}/> Telegram Chat ID</label>
+                    <input 
+                      type="number" 
+                      value={profile.telegram_chat_id} 
+                      onChange={(e) => setProfile({...profile, telegram_chat_id: e.target.value})} 
+                      placeholder="Введи ID из бота"
+                      className="w-full bg-[#111] border border-white/5 rounded-xl px-4 py-3 focus:border-emerald-600 outline-none font-bold text-emerald-400 placeholder:text-zinc-800" 
+                    />
+                  </div>
+                </div>
+              </section>
+
               {/* Секция 1: Имена */}
               <section className="space-y-6">
                 <h3 className="text-lg font-black italic uppercase flex items-center gap-3"><span className="w-1 h-6 bg-blue-600"></span> Личные данные</h3>
