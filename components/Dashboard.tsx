@@ -50,7 +50,6 @@ const Dashboard: React.FC<{ session: any }> = ({ session }) => {
     fetchData(); 
   }, [currentDate, session, activeTab]);
 
-  // Расчет статистики за месяц (только FACT)
   const stats = workouts
     .filter(w => w.source === 'FACT')
     .filter(w => {
@@ -73,8 +72,6 @@ const Dashboard: React.FC<{ session: any }> = ({ session }) => {
 
     return (
       <div className="p-8 max-w-7xl mx-auto w-full animate-in fade-in duration-500">
-        
-        {/* Заголовок и навигация */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
           <div>
             <h2 className="text-3xl font-black italic uppercase tracking-tighter">
@@ -92,7 +89,6 @@ const Dashboard: React.FC<{ session: any }> = ({ session }) => {
           </div>
         </div>
 
-        {/* SUMMARY SECTION (Саммари из скриншота) */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
           <div className="bg-[#111] border border-white/5 p-6 rounded-[2rem] flex items-center gap-5 shadow-xl">
             <div className="w-12 h-12 bg-blue-600/20 rounded-2xl flex items-center justify-center text-blue-500"><MapPin size={24}/></div>
@@ -117,7 +113,6 @@ const Dashboard: React.FC<{ session: any }> = ({ session }) => {
           </div>
         </div>
 
-        {/* Сетка календаря */}
         <div className="bg-[#0c0c0e] border border-white/5 rounded-[2.5rem] p-4 shadow-2xl">
           <div className="grid grid-cols-7 gap-1 mb-2">
             {['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'].map(d => (
@@ -133,7 +128,7 @@ const Dashboard: React.FC<{ session: any }> = ({ session }) => {
                 <div 
                   key={idx} 
                   onClick={() => dateStr && setSelectedDate(dateStr)}
-                  className={`min-h-[120px] p-3 border rounded-[1.5rem] transition-all relative group cursor-pointer
+                  className={`min-h-[140px] p-3 border rounded-[1.5rem] transition-all relative group cursor-pointer
                     ${day ? 'bg-[#111]/50 border-white/[0.03] hover:bg-[#161618] hover:border-blue-500/30' : 'bg-transparent border-none pointer-events-none'}
                     ${isToday ? 'ring-1 ring-blue-500/50 bg-blue-500/[0.03]' : ''}
                   `}
@@ -144,22 +139,38 @@ const Dashboard: React.FC<{ session: any }> = ({ session }) => {
                     </span>
                   )}
                   
-                  <div className="mt-2 space-y-1">
+                  <div className="mt-2 space-y-2">
                     {day && workouts.filter(w => w.date === dateStr).map((w, i) => (
                       <div 
                         key={`${w.id}-${i}`} 
-                        className={`p-2 rounded-xl text-[9px] font-black leading-none border transition-all
+                        className={`p-3 rounded-2xl border transition-all flex flex-col gap-1.5
                           ${w.source === 'FACT' 
                             ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400 shadow-lg shadow-emerald-900/10' 
                             : 'bg-blue-600/10 border-blue-600/20 text-blue-400 border-dashed'}
                         `}
                       >
-                        <div className="flex items-center gap-1">
-                          {w.source === 'PLAN' ? <span>🤖</span> : <div className="w-1 h-1 bg-emerald-400 rounded-full animate-pulse"/>}
-                          <span className="truncate uppercase tracking-tighter">{w.title || w.activity}</span>
+                        {/* Тип тренировки */}
+                        <div className="flex items-center gap-1.5">
+                          {w.source === 'PLAN' ? <span className="text-xs">🤖</span> : <div className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse"/>}
+                          <span className="truncate uppercase tracking-tighter text-[10px] font-extrabold">{w.title || w.activity}</span>
                         </div>
-                        {w.distance_km && <div className="mt-1 opacity-50 text-[7px]">{w.distance_km} KM</div>}
-                        {w.distance && !w.distance_km && <div className="mt-1 opacity-50 text-[7px]">{w.distance}</div>}
+
+                        {/* Дистанция и Темп */}
+                        <div className="flex justify-between items-baseline">
+                          <div className="text-[13px] font-black italic">
+                            {w.distance_km || w.distance || '0'} <span className="text-[8px] opacity-60 not-italic">КМ</span>
+                          </div>
+                          {(w.pace || w.target_pace) && (
+                            <div className="text-[10px] font-bold opacity-80">{w.pace || w.target_pace}</div>
+                          )}
+                        </div>
+
+                        {/* Описание (несколько строк) */}
+                        {(w.description || w.notes) && (
+                          <div className="text-[9px] font-medium leading-snug opacity-60 line-clamp-2 border-t border-white/5 pt-1 mt-0.5">
+                            {w.description || w.notes}
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
