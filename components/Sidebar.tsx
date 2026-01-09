@@ -52,8 +52,12 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, userProfile 
 
       {/* User Mini-Profile & Logout */}
       <div className="mt-auto pt-6 border-t border-white/5 space-y-4">
-        <div className="flex items-center gap-3 px-2">
-          <div className="w-8 h-8 rounded-lg overflow-hidden bg-zinc-800 border border-white/10 flex items-center justify-center">
+        {/* 👇 ТЕПЕРЬ ЭТОТ БЛОК КЛИКАБЕЛЬНЫЙ */}
+        <button 
+          onClick={() => setActiveTab('profile')}
+          className="flex items-center gap-3 px-2 w-full text-left hover:bg-white/5 p-2 rounded-xl transition-all group"
+        >
+          <div className="w-8 h-8 rounded-lg overflow-hidden bg-zinc-800 border border-white/10 flex items-center justify-center shrink-0 group-hover:border-blue-500/50 transition-colors">
             {userProfile?.avatar_url ? (
               <img src={userProfile.avatar_url} alt="Ava" className="w-full h-full object-cover" />
             ) : (
@@ -61,12 +65,12 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, userProfile 
             )}
           </div>
           <div className="overflow-hidden">
-            <p className="text-[10px] font-black uppercase truncate text-white">
+            <p className="text-[10px] font-black uppercase truncate text-white group-hover:text-blue-400 transition-colors">
               {userProfile?.first_name || 'Атлет'}
             </p>
             <p className="text-[8px] text-slate-500 font-bold uppercase tracking-tighter">Premium Plan</p>
           </div>
-        </div>
+        </button>
         
         <button 
           onClick={() => supabase.auth.signOut()}
