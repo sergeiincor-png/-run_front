@@ -1,113 +1,98 @@
-require('dotenv').config();
-const { Telegraf } = require('telegraf');
-const { createClient } = require('@supabase/supabase-js');
-const { GoogleGenerativeAI } = require('@google/generative-ai');
-const fetch = require('node-fetch'); // Убедись, что установлен: npm install node-fetch
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.7"
 
-// 1. Настройки (берем из .env)
-const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
-const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const OPENROUTER_API_KEY = Deno.env.get('OPENROUTER_API_KEY')!
+const TELEGRAM_BOT_TOKEN = Deno.env.get('TELEGRAM_BOT_TOKEN')!
+const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
+const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+const AI_MODEL = "openai/gpt-4o-mini"
 
-// 2. Обработка фото
-bot.on('photo', async (ctx) => {
-  // Отправляем сообщение "Анализирую", чтобы юзер видел реакцию
-  const loadingMsg = await ctx.reply('⚡️ Анализирую скриншот...');
+const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
+const sendTelegramMessage = async (chatId: number, text: string) => {
   try {
-    // --- ШАГ 1: Получаем ссылку на файл от Telegram ---
-    const fileId = ctx.message.photo[ctx.message.photo.length - 1].file_id;
-    const fileLink = await ctx.telegram.getFileLink(fileId);
+    await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: chatId, text: text, parse_mode: 'Markdown' }),
+    })
+  } catch (err) { console.error("Failed to send Telegram message:", err) }
+}
 
-    // --- ШАГ 2: Скачиваем картинку в буфер ---
-    const response = await fetch(fileLink.href);
-    const arrayBuffer = await response.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
+Deno.serve(async (req) => {
+  try {
+    const update = await req.json()
+    const message = update.message
+    if (!message || message.from?.is_bot) return new Response('OK', { status: 200 })
 
-    // --- ШАГ 3: Отправляем в Gemini ---
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-    
-    const prompt = `
-      Ты AI-тренер. Посмотри на скриншот беговой тренировки.
-      Вытащи следующие данные:
-      1. Дистанция (в км, только число, например 5.2)
-      2. Время (в минутах, целое число. Если есть часы, переведи в минуты)
-      3. Темп (строка вида "5:30")
-      4. Дата (в формате YYYY-MM-DD. Если на фото нет года, используй текущий 2025).
-      5. Тип (строка: "Бег", "Восстановление", "Интервалы" - угадай по контексту).
-      
-      ВЕРНИ ТОЛЬКО ЧИСТЫЙ JSON БЕЗ MARKDOWN И ЛИШНИХ СЛОВ.
-      Пример ответа:
-      {"distance": 10.5, "duration": 62, "pace": "5:55", "date": "2025-05-20", "type": "Бег"}
-    `;
+    const chatId = message.chat.id
 
-    const result = await model.generateContent([
-      prompt,
-      { inlineData: { data: buffer.toString("base64"), mimeType: "image/jpeg" } }
-    ]);
-
-    const text = result.response.text();
-    
-    // --- ШАГ 4: Чистим ответ от Gemini (это частая причина зависания) ---
-    // Иногда он добавляет \`\`\`json в начале, убираем это
-    const cleanJson = text.replace(/```json|```/g, '').trim();
-    const data = JSON.parse(cleanJson);
-
-    // --- ШАГ 5: Ищем пользователя в Supabase по Telegram ID ---
-    // (Предполагаем, что у тебя в таблице profiles есть колонка telegram_id или ты мапишь их иначе)
-    // Если ты пока тестируешь на себе, можно хардкодом вставить свой UUID, чтобы проверить
-    // const userId = 'ТВОЙ_UUID_ИЗ_SUPABASE'; 
-    
-    // Если у тебя настроена связь через telegram_id:
-    /*
-    const { data: userData } = await supabase
+    const { data: profile, error: profileError } = await supabase
       .from('profiles')
       .select('id')
-      .eq('telegram_id', ctx.from.id)
-      .single();
-    const userId = userData?.id;
-    */
-   
-    // ВРЕМЕННЫЙ ВАРИАНТ (чтобы работало прямо сейчас - вставляет просто данные):
-    // Тебе нужно убедиться, что ты знаешь user_id, иначе Supabase не даст вставить.
-    // Если у тебя RLS отключен или ты тестируешь - ок.
-    
-    const { error } = await supabase.from('workouts').insert({
-       // user_id: userId, // Раскомментируй, когда настроишь связь ID
-       activity_date: data.date,
-       distance_km: data.distance,
-       duration_minutes: data.duration,
-       pace: data.pace,
-       activity_type: data.type,
-       title: `Тренировка из Telegram`,
-       source: 'TELEGRAM' // Добавил поле source, чтобы отличать в календаре
-    });
+      .eq('telegram_chat_id', chatId)
+      .single()
 
-    if (error) throw new Error(`Supabase error: ${error.message}`);
+    if (profileError || !profile) {
+      await sendTelegramMessage(chatId, "⛔️ Вы не зарегистрированы. Пожалуйста, создайте аккаунт на сайте.")
+      return new Response('User not found', { status: 200 })
+    }
 
-    // --- ШАГ 6: Успех ---
-    await ctx.telegram.editMessageText(
-        ctx.chat.id, 
-        loadingMsg.message_id, 
-        null, 
-        `✅ **Сохранено!**\n\n🏃 **Дистанция:** ${data.distance} км\n⏱ **Время:** ${data.duration} мин\n⚡️ **Темп:** ${data.pace}\n📅 **Дата:** ${data.date}`,
-        { parse_mode: 'Markdown' }
-    );
+    if (message.photo) {
+      await sendTelegramMessage(chatId, "👀 Анализирую скриншот...")
 
-  } catch (e) {
-    console.error("ОШИБКА БОТА:", e);
-    // Вот этот блок не даст боту "зависнуть" молча
-    await ctx.telegram.editMessageText(
-        ctx.chat.id, 
-        loadingMsg.message_id, 
-        null, 
-        `❌ **Ошибка:** Не удалось обработать фото.\n\nПопробуйте сделать скриншот четче или введите данные вручную.\n\nТех. детали: ${e.message}`
-    );
-  }
-});
+      const fileId = message.photo[message.photo.length - 1].file_id
+      const getFileRes = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getFile?file_id=${fileId}`)
+      const fileData = await getFileRes.json()
+      const fileUrl = `https://api.telegram.org/file/bot${TELEGRAM_BOT_TOKEN}/${fileData.result.file_path}`
 
-bot.launch().then(() => console.log('🤖 Бот запущен!'));
+      const imageRes = await fetch(fileUrl)
+      const imageBlob = await imageRes.blob()
+      const arrayBuffer = await imageBlob.arrayBuffer()
+      const base64Image = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)))
 
-// Обработка корректного завершения
-process.once('SIGINT', () => bot.stop('SIGINT'));
-process.once('SIGTERM', () => bot.stop('SIGTERM'));
+      const aiResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          "model": AI_MODEL,
+          "messages": [{
+            "role": "user",
+            "content": [
+              { "type": "text", "text": "Извлеки данные в JSON: activity_date (YYYY-MM-DD), activity_type, distance_km (number), duration_minutes (number), pace (string), title. Верни ТОЛЬКО чистый JSON." },
+              { "type": "image_url", "image_url": { "url": `data:image/jpeg;base64,${base64Image}` } }
+            ]
+          }]
+        })
+      })
+
+      const aiData = await aiResponse.json()
+      const content = aiData.choices[0].message.content
+      const cleanJson = content.replace(/```json/g, "").replace(/```/g, "").trim()
+      const workout = JSON.parse(cleanJson)
+
+      // СОХРАНЕНИЕ С ПОЛЕМ SOURCE: 'FACT'
+      const { error: insertError } = await supabase
+        .from('workouts')
+        .insert({
+          user_id: profile.id,
+          activity_date: workout.activity_date || new Date().toISOString().split('T')[0],
+          activity_type: workout.activity_type || 'Бег',
+          distance_km: workout.distance_km || 0,
+          duration_minutes: workout.duration_minutes || 0,
+          pace: workout.pace || "",
+          title: workout.title || "Тренировка из ТГ",
+          source: 'FACT' // Обязательно для календаря
+        })
+
+      if (insertError) {
+          await sendTelegramMessage(chatId, "❌ Ошибка при сохранении.")
+      } else {
+          await sendTelegramMessage(chatId, `✅ *Сохранено!* \n🏃 ${workout.distance_km} км за ${workout.duration_minutes} мин`)
+      }
+    }
+    return new Response('OK', { status: 200 })
+  } catch (error) { return new Response('Error', { status: 200 }) }
+})
