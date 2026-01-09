@@ -8,11 +8,11 @@ import {
 } from 'lucide-react';
 import Profile from './Profile.tsx'; 
 import Sidebar from './Sidebar.tsx';
-import WorkoutDetail from './WorkoutDetail.tsx'; // Добавляем импорт нового экрана
+import WorkoutDetail from './WorkoutDetail.tsx'; 
 
 const Dashboard: React.FC<{ session: any }> = ({ session }) => {
   const [activeTab, setActiveTab] = useState('dashboard');
-  const [selectedDate, setSelectedDate] = useState<string | null>(null); // Состояние для клика по дате
+  const [selectedDate, setSelectedDate] = useState<string | null>(null); 
   const [currentDate, setCurrentDate] = useState(new Date());
   const [workouts, setWorkouts] = useState<any[]>([]); 
   const [userProfile, setUserProfile] = useState<any>(null);
@@ -70,13 +70,11 @@ const Dashboard: React.FC<{ session: any }> = ({ session }) => {
             <div key={d} className="text-center text-slate-700 text-[10px] font-black mb-2 uppercase">{d}</div>
           ))}
           {daysArr.map((day, idx) => {
-            // Создаем строку даты для текущей ячейки
             const dateStr = day ? `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}` : null;
-            
             return (
               <div 
                 key={idx} 
-                onClick={() => dateStr && setSelectedDate(dateStr)} // Клик по ячейке
+                onClick={() => dateStr && setSelectedDate(dateStr)}
                 className={`min-h-[110px] p-2 border border-white/5 rounded-xl transition-all cursor-pointer ${day ? 'bg-[#0a0a0a] hover:border-blue-500/30' : 'bg-transparent border-none'}`}
               >
                 {day && <span className="text-[10px] font-bold text-slate-600">{day}</span>}
@@ -98,16 +96,13 @@ const Dashboard: React.FC<{ session: any }> = ({ session }) => {
   };
 
   const renderMainContent = () => {
-    // Приоритет: если выбрана дата, показываем детализацию
     if (selectedDate) {
       return <WorkoutDetail date={selectedDate} session={session} onBack={() => setSelectedDate(null)} />;
     }
 
     switch (activeTab) {
-      case 'profile':
-        return <Profile session={session} onBack={() => setActiveTab('dashboard')} />;
-      case 'dashboard':
-        return renderCalendar();
+      case 'profile': return <Profile session={session} onBack={() => setActiveTab('dashboard')} />;
+      case 'dashboard': return renderCalendar();
       case 'coach':
         return (
           <div className="flex flex-col items-center justify-center min-h-[80vh] text-center p-8">
@@ -116,22 +111,15 @@ const Dashboard: React.FC<{ session: any }> = ({ session }) => {
              </div>
              <h2 className="text-3xl font-black italic uppercase mb-2">AI Тренер</h2>
              <p className="text-slate-400 max-w-md font-medium">Ваш персональный интеллект анализирует выполненные тренировки и адаптирует план под ваш прогресс.</p>
-             <div className="mt-8 px-6 py-3 bg-white/5 border border-white/10 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] text-blue-400 animate-pulse">
-                Анализ данных в процессе...
-             </div>
           </div>
         );
-      default:
-        return <div className="p-8 text-slate-500 uppercase font-black text-xs">Раздел в разработке...</div>;
+      default: return <div className="p-8 text-slate-500 uppercase font-black text-xs">В разработке...</div>;
     }
   };
 
   return (
-    <div className="flex min-h-screen bg-[#09090b] text-white font-sans selection:bg-blue-500/30">
-      {/* Левая панель */}
+    <div className="flex min-h-screen bg-[#09090b] text-white font-sans">
       <Sidebar activeTab={activeTab} setActiveTab={(tab) => { setActiveTab(tab); setSelectedDate(null); }} userProfile={userProfile} />
-
-      {/* Основной контент */}
       <main className="flex-1 overflow-y-auto relative">
         {isLoading && (
           <div className="absolute top-8 right-8">
