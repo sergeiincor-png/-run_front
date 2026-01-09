@@ -179,7 +179,7 @@ const Profile: React.FC<ProfileProps> = ({ session, onBack }) => {
               </div>
 
               <h3 className="text-xl font-black italic uppercase">{profile.first_name || 'Атлет'}</h3>
-              <p className="text-blue-500 text-[10px] font-black uppercase mt-1">Ранг: Активен</p>
+
             </div>
           </div>
 
