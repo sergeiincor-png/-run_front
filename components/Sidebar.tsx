@@ -68,7 +68,6 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, userProfile 
             <p className="text-[10px] font-black uppercase truncate text-white group-hover:text-blue-400 transition-colors">
               {userProfile?.first_name || 'Атлет'}
             </p>
-            <p className="text-[8px] text-slate-500 font-bold uppercase tracking-tighter">Premium Plan</p>
           </div>
         </button>
         
