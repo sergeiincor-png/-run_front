@@ -143,8 +143,8 @@ const Profile: React.FC<ProfileProps> = ({ session, onBack }) => {
                 <User size={48} className="text-white/20" />
               </div>
               <h3 className="text-xl font-black italic uppercase">{profile.first_name || 'Атлет'}</h3>
-              <p className="text-blue-500 text-[10px] font-black uppercase tracking-[0.2em] mt-1">Status: Active</p>
-            </div>
+
+                          </div>
           </div>
 
           <div className="md:col-span-2">
