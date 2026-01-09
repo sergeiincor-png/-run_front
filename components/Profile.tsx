@@ -9,7 +9,8 @@ import {
   CheckCircle2,
   AlertCircle,
   Target,
-  CalendarDays
+  CalendarDays,
+  Camera // Добавлена иконка камеры
 } from 'lucide-react';
 
 interface ProfileProps {
@@ -20,9 +21,10 @@ interface ProfileProps {
 const Profile: React.FC<ProfileProps> = ({ session, onBack }) => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false); // Состояние для загрузки фото
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
-  // Состояние со всеми рабочими полями БЕЗ avatar_url
+  // Состояние со всеми полями, включая новое avatar_url
   const [profile, setProfile] = useState({
     first_name: '',
     last_name: '',
@@ -31,7 +33,8 @@ const Profile: React.FC<ProfileProps> = ({ session, onBack }) => {
     max_hr: '',
     threshold_hr: '',
     goal_distance_km: '',
-    target_race_date: ''
+    target_race_date: '',
+    avatar_url: '' // Новое поле для ссылки на фото
   });
 
   useEffect(() => {
@@ -60,7 +63,8 @@ const Profile: React.FC<ProfileProps> = ({ session, onBack }) => {
           max_hr: data.max_hr?.toString() || '',
           threshold_hr: data.threshold_hr?.toString() || '',
           goal_distance_km: data.goal_distance_km?.toString() || '',
-          target_race_date: data.target_race_date || ''
+          target_race_date: data.target_race_date || '',
+          avatar_url: data.avatar_url || '' // Загружаем ссылку на аватар
         });
       }
     } catch (error: any) {
@@ -70,13 +74,49 @@ const Profile: React.FC<ProfileProps> = ({ session, onBack }) => {
     }
   }
 
+  // Новая функция для загрузки аватара
+  async function uploadAvatar(event: React.ChangeEvent<HTMLInputElement>) {
+    try {
+      setUploading(true);
+      if (!event.target.files || event.target.files.length === 0) {
+        throw new Error('Вы должны выбрать изображение для загрузки.');
+      }
+
+      const file = event.target.files[0];
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${session.user.id}-${Math.random()}.${fileExt}`;
+      const filePath = `${fileName}`;
+
+      // 1. Загружаем файл в Supabase Storage
+      const { error: uploadError } = await supabase.storage
+        .from('avatars') // Убедитесь, что бакет 'avatars' создан
+        .upload(filePath, file);
+
+      if (uploadError) throw uploadError;
+
+      // 2. Получаем публичную ссылку на файл
+      const { data: { publicUrl } } = supabase.storage
+        .from('avatars')
+        .getPublicUrl(filePath);
+
+      // 3. Обновляем состояние и сразу сохраняем ссылку в базе данных
+      setProfile(prev => ({ ...prev, avatar_url: publicUrl }));
+      await supabase.from('profiles').update({ avatar_url: publicUrl }).eq('id', session.user.id);
+      
+      setMessage({ type: 'success', text: 'Фотография обновлена!' });
+    } catch (error: any) {
+      setMessage({ type: 'error', text: error.message });
+    } finally {
+      setUploading(false);
+    }
+  }
+
   async function updateProfile(e: React.FormEvent) {
     e.preventDefault();
     try {
       setSaving(true);
       setMessage(null);
 
-      // Отправляем только те поля, которые точно есть в базе
       const updates = {
         id: session.user.id,
         first_name: profile.first_name,
@@ -87,6 +127,7 @@ const Profile: React.FC<ProfileProps> = ({ session, onBack }) => {
         threshold_hr: profile.threshold_hr ? parseInt(profile.threshold_hr, 10) : null,
         goal_distance_km: profile.goal_distance_km ? parseFloat(profile.goal_distance_km) : null,
         target_race_date: profile.target_race_date || null,
+        avatar_url: profile.avatar_url, // Добавляем ссылку на аватар при сохранении
         updated_at: new Date().toISOString(),
       };
 
@@ -129,12 +170,34 @@ const Profile: React.FC<ProfileProps> = ({ session, onBack }) => {
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-12">
           
+          {/* Левая колонка: Аватар */}
           <div className="space-y-6">
             <div className="bg-[#111] border border-white/5 rounded-3xl p-8 text-center relative overflow-hidden">
               <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-600 to-indigo-600"></div>
-              <div className="w-24 h-24 bg-zinc-800 rounded-2xl mx-auto mb-4 flex items-center justify-center border border-white/10 shadow-2xl">
-                <User size={48} className="text-white/20" />
+              
+              {/* Блок с изображением и загрузкой */}
+              <div className="relative w-32 h-32 mx-auto mb-6 group">
+                <div className="w-full h-full bg-zinc-800 rounded-2xl overflow-hidden border border-white/10 shadow-2xl flex items-center justify-center">
+                  {profile.avatar_url ? (
+                    <img src={profile.avatar_url} alt="Avatar" className="w-full h-full object-cover" />
+                  ) : (
+                    <User size={64} className="text-white/10" />
+                  )}
+                </div>
+                
+                {/* Кнопка загрузки, появляющаяся при наведении */}
+                <label className="absolute inset-0 flex items-center justify-center bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer rounded-2xl">
+                  <input 
+                    type="file" 
+                    className="hidden" 
+                    accept="image/*" 
+                    onChange={uploadAvatar} 
+                    disabled={uploading} 
+                  />
+                  {uploading ? <Activity className="animate-spin text-white" /> : <Camera className="text-white" />}
+                </label>
               </div>
+
               <h3 className="text-xl font-black italic uppercase tracking-tight">
                 {profile.first_name} {profile.last_name}
               </h3>
