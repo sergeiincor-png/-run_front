@@ -4,26 +4,25 @@ import {
   ChevronLeft, 
   ChevronRight, 
   Activity, 
-  User, 
-  LayoutDashboard,
-  Target
+  Brain
 } from 'lucide-react';
 import Profile from './Profile.tsx'; 
+import Sidebar from './Sidebar.tsx';
 
 const Dashboard: React.FC<{ session: any }> = ({ session }) => {
-  const [showProfile, setShowProfile] = useState(false);
+  const [activeTab, setActiveTab] = useState('dashboard');
   const [currentDate, setCurrentDate] = useState(new Date());
   const [workouts, setWorkouts] = useState<any[]>([]); 
-  const [userProfile, setUserProfile] = useState<any>(null); // Состояние для данных профиля
+  const [userProfile, setUserProfile] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  // ЗАГРУЗКА ДАННЫХ (Профиль + Тренировки + ИИ Планы)
   const fetchData = async () => {
     const userId = session?.user?.id;
     if (!userId) return;
     setIsLoading(true);
 
     try {
-      // Загружаем тренировки, планы И данные профиля одновременно
       const [factRes, planRes, profileRes] = await Promise.all([
         supabase.from('workouts').select('*').eq('user_id', userId),
         supabase.from('training_plans').select('*').eq('user_id', userId),
@@ -36,7 +35,7 @@ const Dashboard: React.FC<{ session: any }> = ({ session }) => {
       ];
       
       setWorkouts(combined);
-      if (profileRes.data) setUserProfile(profileRes.data); // Сохраняем профиль (имя, фото)
+      if (profileRes.data) setUserProfile(profileRes.data);
     } catch (e) {
       console.error("Ошибка загрузки:", e);
     }
@@ -44,32 +43,22 @@ const Dashboard: React.FC<{ session: any }> = ({ session }) => {
   };
 
   useEffect(() => { 
-    if (!showProfile) fetchData(); 
-  }, [currentDate, session, showProfile]);
+    fetchData(); 
+  }, [currentDate, session, activeTab]);
 
-  if (showProfile) {
-    return <Profile session={session} onBack={() => setShowProfile(false)} />;
-  }
+  // КОНТЕНТ КАЛЕНДАРЯ
+  const renderCalendar = () => {
+    const monthNames = ["Январь", "Февраль", "Март", "Апрель", "Май", "Июнь", "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"];
+    const daysInMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
+    const firstDay = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1).getDay();
+    const startOffset = firstDay === 0 ? 6 : firstDay - 1;
+    const daysArr = [...Array(startOffset).fill(null), ...Array.from({length: daysInMonth}, (_, i) => i + 1)];
 
-  const monthNames = ["Январь", "Февраль", "Март", "Апрель", "Май", "Июнь", "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"];
-  const daysInMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
-  const firstDay = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1).getDay();
-  const startOffset = firstDay === 0 ? 6 : firstDay - 1;
-  const daysArr = [...Array(startOffset).fill(null), ...Array.from({length: daysInMonth}, (_, i) => i + 1)];
-
-  return (
-    <div className="min-h-screen bg-[#09090b] text-white p-4 font-sans">
-      
-      {/* Header */}
-      <div className="flex justify-between items-center mb-8 border-b border-white/10 pb-6 max-w-6xl mx-auto">
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2 mr-4">
-             <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg">
-                <LayoutDashboard size={20} />
-             </div>
-             <span className="font-black italic text-xl tracking-tighter uppercase">Run Coach</span>
-          </div>
-
+    return (
+      <div className="p-8 max-w-6xl mx-auto w-full">
+        <div className="flex justify-between items-center mb-8">
+          <h2 className="text-2xl font-black italic uppercase tracking-tight">Тренировочный план</h2>
+          
           <div className="flex items-center gap-2 bg-white/5 p-1 rounded-lg">
             <button onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1))} className="p-1.5 hover:bg-white/10 rounded-md transition-colors"><ChevronLeft size={18} /></button>
             <h2 className="text-xs font-black uppercase tracking-widest min-w-[120px] text-center">{monthNames[currentDate.getMonth()]} {currentDate.getFullYear()}</h2>
@@ -77,50 +66,71 @@ const Dashboard: React.FC<{ session: any }> = ({ session }) => {
           </div>
         </div>
 
-        {/* Кнопка Профиля с Именем и Фото */}
-        <button 
-          onClick={() => setShowProfile(true)}
-          className="flex items-center gap-3 bg-white/5 hover:bg-white/10 pl-2 pr-4 py-2 rounded-2xl border border-white/5 transition-all group"
-        >
-          {/* Отображаем фото, если оно есть, иначе иконку */}
-          <div className="w-8 h-8 rounded-lg overflow-hidden bg-zinc-800 border border-white/10 flex items-center justify-center">
-            {userProfile?.avatar_url ? (
-              <img src={userProfile.avatar_url} alt="Avatar" className="w-full h-full object-cover" />
-            ) : (
-              <User size={16} className="text-blue-400" />
-            )}
-          </div>
-          <div className="text-left hidden md:block">
-            <div className="text-[10px] font-black uppercase tracking-widest leading-none">
-              {userProfile?.first_name || 'Атлет'}
-            </div>
-            <div className="text-[8px] text-blue-500 font-bold uppercase tracking-tighter mt-0.5">Открыть профиль</div>
-          </div>
-        </button>
-      </div>
-
-      {/* Календарь */}
-      <div className="grid grid-cols-7 gap-2 max-w-6xl mx-auto">
-        {['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'].map(d => (
-          <div key={d} className="text-center text-slate-700 text-[10px] font-black mb-2 uppercase">{d}</div>
-        ))}
-        {daysArr.map((day, idx) => (
-          <div key={idx} className={`min-h-[110px] p-2 border border-white/5 rounded-xl transition-all ${day ? 'bg-[#0a0a0a] hover:border-white/10' : 'bg-transparent border-none'}`}>
-            {day && <span className="text-[10px] font-bold text-slate-600">{day}</span>}
-            {day && workouts.filter(w => {
-               const d = new Date(w.date);
-               return d.getDate() === day && d.getMonth() === currentDate.getMonth() && d.getFullYear() === currentDate.getFullYear();
-            }).map(w => (
-              <div key={w.id} className={`mt-1.5 p-1.5 border rounded-lg text-[9px] font-bold leading-tight ${w.source === 'FACT' ? 'bg-green-500/10 border-green-500/20 text-green-400' : 'bg-blue-500/5 border-blue-500/10 text-blue-400 border-dashed'}`}>
-                <div className="flex items-center gap-1">
-                  {w.source === 'PLAN' && <span>🤖</span>}
-                  <span className="truncate">{w.title || w.activity}</span>
+        <div className="grid grid-cols-7 gap-2">
+          {['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'].map(d => (
+            <div key={d} className="text-center text-slate-700 text-[10px] font-black mb-2 uppercase">{d}</div>
+          ))}
+          {daysArr.map((day, idx) => (
+            <div key={idx} className={`min-h-[110px] p-2 border border-white/5 rounded-xl transition-all ${day ? 'bg-[#0a0a0a] hover:border-white/10' : 'bg-transparent border-none'}`}>
+              {day && <span className="text-[10px] font-bold text-slate-600">{day}</span>}
+              {day && workouts.filter(w => {
+                 const d = new Date(w.date);
+                 return d.getDate() === day && d.getMonth() === currentDate.getMonth() && d.getFullYear() === currentDate.getFullYear();
+              }).map(w => (
+                <div key={w.id} className={`mt-1.5 p-1.5 border rounded-lg text-[9px] font-bold leading-tight ${w.source === 'FACT' ? 'bg-green-500/10 border-green-500/20 text-green-400' : 'bg-blue-500/5 border-blue-500/10 text-blue-400 border-dashed'}`}>
+                  <div className="flex items-center gap-1">
+                    {w.source === 'PLAN' && <span title="AI Plan">🤖</span>}
+                    <span className="truncate">{w.title || w.activity}</span>
+                  </div>
+                  {w.distance && <div className="text-[7px] opacity-50 mt-0.5">{w.distance}</div>}
                 </div>
-              </div>
-            ))}
-          </div>
-        ))}
+              ))}
+            </div>
+          ))}
+        </div>
       </div>
+    );
+  };
+
+  // ПЕРЕКЛЮЧАТЕЛЬ ВКЛАДОК
+  const renderMainContent = () => {
+    switch (activeTab) {
+      case 'profile':
+        return <Profile session={session} onBack={() => setActiveTab('dashboard')} />;
+      case 'dashboard':
+        return renderCalendar();
+      case 'coach':
+        return (
+          <div className="flex flex-col items-center justify-center min-h-[80vh] text-center p-8">
+             <div className="w-20 h-20 bg-blue-600/20 rounded-3xl flex items-center justify-center text-blue-500 mb-6 shadow-2xl shadow-blue-500/20">
+                <Brain size={40} />
+             </div>
+             <h2 className="text-3xl font-black italic uppercase mb-2">AI Тренер</h2>
+             <p className="text-slate-400 max-w-md font-medium">Ваш персональный интеллект анализирует выполненные тренировки и адаптирует план под ваш прогресс.</p>
+             <div className="mt-8 px-6 py-3 bg-white/5 border border-white/10 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] text-blue-400 animate-pulse">
+                Анализ данных в процессе...
+             </div>
+          </div>
+        );
+      default:
+        return <div className="p-8 text-slate-500 uppercase font-black text-xs">Раздел в разработке...</div>;
+    }
+  };
+
+  return (
+    <div className="flex min-h-screen bg-[#09090b] text-white font-sans selection:bg-blue-500/30">
+      {/* Левая панель */}
+      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} userProfile={userProfile} />
+
+      {/* Основной контент */}
+      <main className="flex-1 overflow-y-auto relative">
+        {isLoading && (
+          <div className="absolute top-8 right-8">
+            <Activity className="animate-spin text-blue-500" size={20} />
+          </div>
+        )}
+        {renderMainContent()}
+      </main>
     </div>
   );
 };
