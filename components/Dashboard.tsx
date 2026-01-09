@@ -176,18 +176,25 @@ const Dashboard: React.FC<{ session: any }> = ({ session }) => {
                           <span className="truncate uppercase tracking-tighter text-[9px] font-black leading-none">{w.title || w.activity}</span>
                         </div>
 
-                        {/* 2. Основные цифры (Крупно) */}
-                        <div className="flex justify-between items-end border-b border-white/5 pb-1.5">
-                          <div className="text-[15px] font-black italic tracking-tighter leading-none">
-                            {w.distance_km || w.distance || '—'} <span className="text-[8px] opacity-60 not-italic ml-0.5">КМ</span>
-                          </div>
-                          {(w.pace || w.target_pace) && (
-                            <div className="text-[10px] font-bold opacity-90 leading-none">
-                              {w.pace || w.target_pace} <span className="text-[7px] opacity-40 font-medium">/КМ</span>
-                            </div>
-                          )}
-                        </div>
-
+{/* 2. Основные цифры (Крупно) */}
+<div className="flex justify-between items-end border-b border-white/5 pb-1.5">
+  <div className="text-[15px] font-black italic tracking-tighter leading-none">
+    {/* Очищаем значение от дублей КМ, если они пришли из базы в виде строки */}
+    {(w.distance_km || w.distance || '—')
+      .toString()
+      .replace(/(км|km|КМ|KM)/gi, '') // Убираем любые упоминания км
+      .trim()} 
+    <span className="text-[8px] opacity-60 not-italic ml-0.5">КМ</span>
+  </div>
+  {(w.pace || w.target_pace) && (
+    <div className="text-[10px] font-bold opacity-90 leading-none">
+      {/* То же самое для темпа, если там дублируется /км */}
+      {(w.pace || w.target_pace).toString().replace(/(\/км|\/km)/gi, '').trim()} 
+      <span className="text-[7px] opacity-40 font-medium">/КМ</span>
+    </div>
+  )}
+</div>
+                        
                         {/* 3. Краткое описание */}
                         {(w.description || w.notes) && (
                           <div className="text-[9px] font-medium leading-[1.3] opacity-60 line-clamp-3">
