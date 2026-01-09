@@ -52,7 +52,7 @@ Deno.serve(async (req) => {
           "messages": [{
             "role": "user",
             "content": [
-              { "type": "text", "text": "Извлеки в JSON: activity_date (YYYY-MM-DD), activity_type, distance_km (number), duration_minutes (number), calories (number), title. Верни ТОЛЬКО JSON." },
+              { "type": "text", "text": "Извлеки данные в JSON. Поля: activity_date (YYYY-MM-DD), activity_type, distance_km (число), duration_minutes (число), pace (темп, например 5:30), calories (число), title. Ответь ТОЛЬКО чистым JSON." },
               { "type": "image_url", "image_url": { "url": `data:image/jpeg;base64,${base64Image}` } }
             ]
           }]
@@ -60,21 +60,24 @@ Deno.serve(async (req) => {
       })
 
       const aiData = await aiResponse.json()
-      const workout = JSON.parse(aiData.choices[0].message.content.replace(/```json|```/g, "").trim())
+      const content = aiData.choices[0].message.content
+      const workout = JSON.parse(content.replace(/```json|```/g, "").trim())
 
-      // СОХРАНЕНИЕ С ИСПРАВЛЕННЫМИ ПОЛЯМИ
-      await supabase.from('workouts').insert({
+      const { error: insertError } = await supabase.from('workouts').insert({
         user_id: profile.id,
         activity_date: workout.activity_date || new Date().toISOString().split('T')[0],
-        activity_type: workout.activity_type,
-        distance_km: workout.distance_km,
-        duration_minutes: workout.duration_minutes,
-        calories: workout.calories,
-        title: workout.title,
-        source: 'FACT' // <--- Добавили источник
+        activity_type: workout.activity_type || 'Бег',
+        distance_km: workout.distance_km || 0,
+        duration_minutes: workout.duration_minutes || 0,
+        pace: workout.pace || "", // <-- ТЕМП ТЕПЕРЬ ТУТ
+        calories: workout.calories || 0,
+        title: workout.title || 'Пробежка из ТГ',
+        source: 'FACT'
       })
 
-      await sendTelegramMessage(chatId, `✅ Сохранено: ${workout.distance_km} км`)
+      if (insertError) throw insertError;
+
+      await sendTelegramMessage(chatId, `✅ *Сохранено!* \n📏 Дистанция: ${workout.distance_km} км \n⏱ Темп: ${workout.pace || '—'}`)
     }
     return new Response('OK')
   } catch (e) { return new Response('Error') }
