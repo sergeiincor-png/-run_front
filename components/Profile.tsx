@@ -21,7 +21,7 @@ const Profile: React.FC<ProfileProps> = ({ session, onBack }) => {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
-  // Состояние полей профиля
+  // Состояние полей профиля (в React инпуты всегда хранят строки)
   const [profile, setProfile] = useState({
     first_name: '',
     last_name: '',
@@ -57,10 +57,10 @@ const Profile: React.FC<ProfileProps> = ({ session, onBack }) => {
         setProfile({
           first_name: data.first_name || '',
           last_name: data.last_name || '',
-          height: data.height || '',
-          weight: data.weight || '',
-          max_hr: data.max_hr || '',
-          threshold_hr: data.threshold_hr || '',
+          height: data.height?.toString() || '',
+          weight: data.weight?.toString() || '',
+          max_hr: data.max_hr?.toString() || '',
+          threshold_hr: data.threshold_hr?.toString() || '',
           strava_connected: data.strava_connected || false,
           garmin_connected: data.garmin_connected || false
         });
@@ -80,9 +80,19 @@ const Profile: React.FC<ProfileProps> = ({ session, onBack }) => {
       setMessage(null);
       const { user } = session;
 
+      // ВАЖНО: Преобразуем строки в числа перед отправкой в базу данных,
+      // чтобы избежать ошибки 400 (Bad Request)
       const updates = {
         id: user.id,
-        ...profile,
+        first_name: profile.first_name,
+        last_name: profile.last_name,
+        // Если поле пустое, отправляем null, иначе преобразуем в число
+        height: profile.height ? parseFloat(profile.height) : null,
+        weight: profile.weight ? parseFloat(profile.weight) : null,
+        max_hr: profile.max_hr ? parseInt(profile.max_hr, 10) : null,
+        threshold_hr: profile.threshold_hr ? parseInt(profile.threshold_hr, 10) : null,
+        strava_connected: profile.strava_connected,
+        garmin_connected: profile.garmin_connected,
         updated_at: new Date().toISOString(),
       };
 
@@ -91,9 +101,11 @@ const Profile: React.FC<ProfileProps> = ({ session, onBack }) => {
       if (error) throw error;
       
       setMessage({ type: 'success', text: 'Профиль успешно обновлен!' });
+      // Очистка сообщения через 3 секунды
       setTimeout(() => setMessage(null), 3000);
     } catch (error: any) {
-      setMessage({ type: 'error', text: error.message });
+      console.error('Ошибка при сохранении:', error);
+      setMessage({ type: 'error', text: error.message || 'Ошибка сохранения' });
     } finally {
       setSaving(false);
     }
@@ -101,7 +113,7 @@ const Profile: React.FC<ProfileProps> = ({ session, onBack }) => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
+      <div className="min-h-screen bg-[#09090b] flex items-center justify-center">
         <Activity className="animate-spin text-blue-500" size={40} />
       </div>
     );
@@ -154,7 +166,11 @@ const Profile: React.FC<ProfileProps> = ({ session, onBack }) => {
                   </div>
                   <span className="text-sm font-bold">Strava</span>
                 </div>
-                {profile.strava_connected ? <CheckCircle2 className="text-green-500" size={18} /> : <button className="text-[10px] font-black text-blue-500 uppercase">Подключить</button>}
+                {profile.strava_connected ? (
+                  <CheckCircle2 className="text-green-500" size={18} />
+                ) : (
+                  <button type="button" className="text-[10px] font-black text-blue-500 uppercase">Подключить</button>
+                )}
               </div>
             </div>
           </div>
@@ -207,6 +223,7 @@ const Profile: React.FC<ProfileProps> = ({ session, onBack }) => {
                     <label className="text-[10px] font-black uppercase text-slate-500 ml-1">Вес (кг)</label>
                     <input 
                       type="number" 
+                      step="0.1"
                       value={profile.weight}
                       onChange={(e) => setProfile({...profile, weight: e.target.value})}
                       className="w-full bg-[#111] border border-white/5 rounded-xl px-4 py-3 focus:border-blue-600 outline-none transition-all font-bold" 
