@@ -1,16 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
 import { 
-  User, 
-  Activity, 
-  Save, 
-  ArrowLeft, 
-  LogOut, 
-  CheckCircle2,
-  AlertCircle,
-  Target,
-  CalendarDays,
-  Camera // Добавлена иконка камеры
+  User, Activity, Save, ArrowLeft, LogOut, 
+  CheckCircle2, AlertCircle, Target, CalendarDays, Camera
 } from 'lucide-react';
 
 interface ProfileProps {
@@ -21,10 +13,9 @@ interface ProfileProps {
 const Profile: React.FC<ProfileProps> = ({ session, onBack }) => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [uploading, setUploading] = useState(false); // Состояние для загрузки фото
+  const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
-  // Состояние со всеми полями, включая новое avatar_url
   const [profile, setProfile] = useState({
     first_name: '',
     last_name: '',
@@ -34,7 +25,7 @@ const Profile: React.FC<ProfileProps> = ({ session, onBack }) => {
     threshold_hr: '',
     goal_distance_km: '',
     target_race_date: '',
-    avatar_url: '' // Новое поле для ссылки на фото
+    avatar_url: ''
   });
 
   useEffect(() => {
@@ -45,7 +36,6 @@ const Profile: React.FC<ProfileProps> = ({ session, onBack }) => {
     try {
       setLoading(true);
       const { user } = session;
-
       const { data, error, status } = await supabase
         .from('profiles')
         .select('*')
@@ -64,48 +54,43 @@ const Profile: React.FC<ProfileProps> = ({ session, onBack }) => {
           threshold_hr: data.threshold_hr?.toString() || '',
           goal_distance_km: data.goal_distance_km?.toString() || '',
           target_race_date: data.target_race_date || '',
-          avatar_url: data.avatar_url || '' // Загружаем ссылку на аватар
+          avatar_url: data.avatar_url || ''
         });
       }
     } catch (error: any) {
-      console.error('Ошибка загрузки профиля:', error.message);
+      console.error('Ошибка загрузки:', error.message);
     } finally {
       setLoading(false);
     }
   }
 
-  // Новая функция для загрузки аватара
+  // Загрузка фото в бакет 'avatars'
   async function uploadAvatar(event: React.ChangeEvent<HTMLInputElement>) {
     try {
       setUploading(true);
-      if (!event.target.files || event.target.files.length === 0) {
-        throw new Error('Вы должны выбрать изображение для загрузки.');
-      }
+      if (!event.target.files || event.target.files.length === 0) return;
 
       const file = event.target.files[0];
       const fileExt = file.name.split('.').pop();
       const fileName = `${session.user.id}-${Math.random()}.${fileExt}`;
-      const filePath = `${fileName}`;
 
-      // 1. Загружаем файл в Supabase Storage
       const { error: uploadError } = await supabase.storage
-        .from('avatars') // Убедитесь, что бакет 'avatars' создан
-        .upload(filePath, file);
+        .from('avatars')
+        .upload(fileName, file);
 
       if (uploadError) throw uploadError;
 
-      // 2. Получаем публичную ссылку на файл
       const { data: { publicUrl } } = supabase.storage
         .from('avatars')
-        .getPublicUrl(filePath);
+        .getPublicUrl(fileName);
 
-      // 3. Обновляем состояние и сразу сохраняем ссылку в базе данных
       setProfile(prev => ({ ...prev, avatar_url: publicUrl }));
+      // Сразу обновляем в базе, чтобы не потерять при перезагрузке
       await supabase.from('profiles').update({ avatar_url: publicUrl }).eq('id', session.user.id);
       
-      setMessage({ type: 'success', text: 'Фотография обновлена!' });
+      setMessage({ type: 'success', text: 'Фото обновлено!' });
     } catch (error: any) {
-      setMessage({ type: 'error', text: error.message });
+      setMessage({ type: 'error', text: 'Ошибка загрузки фото' });
     } finally {
       setUploading(false);
     }
@@ -127,36 +112,27 @@ const Profile: React.FC<ProfileProps> = ({ session, onBack }) => {
         threshold_hr: profile.threshold_hr ? parseInt(profile.threshold_hr, 10) : null,
         goal_distance_km: profile.goal_distance_km ? parseFloat(profile.goal_distance_km) : null,
         target_race_date: profile.target_race_date || null,
-        avatar_url: profile.avatar_url, // Добавляем ссылку на аватар при сохранении
+        avatar_url: profile.avatar_url,
         updated_at: new Date().toISOString(),
       };
 
       const { error } = await supabase.from('profiles').upsert(updates);
-
       if (error) throw error;
       
-      setMessage({ type: 'success', text: 'Профиль успешно сохранен!' });
+      setMessage({ type: 'success', text: 'Профиль сохранен!' });
       setTimeout(() => setMessage(null), 3000);
     } catch (error: any) {
-      console.error('Ошибка сохранения:', error);
       setMessage({ type: 'error', text: error.message });
     } finally {
       setSaving(false);
     }
   }
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-[#09090b] flex items-center justify-center">
-        <Activity className="animate-spin text-blue-500" size={40} />
-      </div>
-    );
-  }
+  if (loading) return <div className="min-h-screen bg-black flex items-center justify-center"><Activity className="animate-spin text-blue-500" size={40} /></div>;
 
   return (
     <div className="min-h-screen bg-[#09090b] text-white font-sans p-4 md:p-8">
       <div className="max-w-4xl mx-auto">
-        
         <div className="flex justify-between items-center mb-12">
           <button onClick={onBack} className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors group">
             <ArrowLeft size={20} className="group-hover:-translate-x-1 transition-transform" />
@@ -169,31 +145,21 @@ const Profile: React.FC<ProfileProps> = ({ session, onBack }) => {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-12">
-          
-          {/* Левая колонка: Аватар */}
+          {/* Боковая панель: Фото */}
           <div className="space-y-6">
             <div className="bg-[#111] border border-white/5 rounded-3xl p-8 text-center relative overflow-hidden">
               <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-600 to-indigo-600"></div>
               
-              {/* Блок с изображением и загрузкой */}
               <div className="relative w-32 h-32 mx-auto mb-6 group">
                 <div className="w-full h-full bg-zinc-800 rounded-2xl overflow-hidden border border-white/10 shadow-2xl flex items-center justify-center">
                   {profile.avatar_url ? (
-                    <img src={profile.avatar_url} alt="Avatar" className="w-full h-full object-cover" />
+                    <img src={profile.avatar_url} alt="Profile" className="w-full h-full object-cover" />
                   ) : (
                     <User size={64} className="text-white/10" />
                   )}
                 </div>
-                
-                {/* Кнопка загрузки, появляющаяся при наведении */}
                 <label className="absolute inset-0 flex items-center justify-center bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer rounded-2xl">
-                  <input 
-                    type="file" 
-                    className="hidden" 
-                    accept="image/*" 
-                    onChange={uploadAvatar} 
-                    disabled={uploading} 
-                  />
+                  <input type="file" className="hidden" accept="image/*" onChange={uploadAvatar} disabled={uploading} />
                   {uploading ? <Activity className="animate-spin text-white" /> : <Camera className="text-white" />}
                 </label>
               </div>
@@ -207,6 +173,7 @@ const Profile: React.FC<ProfileProps> = ({ session, onBack }) => {
           <div className="md:col-span-2">
             <form onSubmit={updateProfile} className="space-y-8">
               
+              {/* Секция 1: Имена */}
               <section className="space-y-6">
                 <h3 className="text-lg font-black italic uppercase flex items-center gap-3"><span className="w-1 h-6 bg-blue-600"></span> Личные данные</h3>
                 <div className="grid grid-cols-2 gap-4">
@@ -221,6 +188,7 @@ const Profile: React.FC<ProfileProps> = ({ session, onBack }) => {
                 </div>
               </section>
 
+              {/* Секция 2: Дистанция и Дата */}
               <section className="space-y-6">
                 <h3 className="text-lg font-black italic uppercase flex items-center gap-3"><span className="w-1 h-6 bg-indigo-600"></span> Цели забега</h3>
                 <div className="grid grid-cols-2 gap-4">
@@ -235,6 +203,7 @@ const Profile: React.FC<ProfileProps> = ({ session, onBack }) => {
                 </div>
               </section>
 
+              {/* Секция 3: Вес, Рост, ЧСС */}
               <section className="space-y-6">
                 <h3 className="text-lg font-black italic uppercase flex items-center gap-3"><span className="w-1 h-6 bg-blue-600"></span> Физиология</h3>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
