@@ -1,6 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
-import { ChevronLeft, ChevronRight, Activity, Brain } from 'lucide-react';
+import { 
+  ChevronLeft, 
+  ChevronRight, 
+  Activity, 
+  Brain,
+  Calendar as CalendarIcon,
+  Timer,
+  MapPin,
+  Trophy
+} from 'lucide-react';
 import Profile from './Profile'; 
 import Sidebar from './Sidebar';
 import WorkoutDetail from './WorkoutDetail'; 
@@ -41,55 +50,129 @@ const Dashboard: React.FC<{ session: any }> = ({ session }) => {
     fetchData(); 
   }, [currentDate, session, activeTab]);
 
+  // Расчет статистики за месяц (только FACT)
+  const stats = workouts
+    .filter(w => w.source === 'FACT')
+    .filter(w => {
+      const d = new Date(w.date);
+      return d.getMonth() === currentDate.getMonth() && d.getFullYear() === currentDate.getFullYear();
+    })
+    .reduce((acc, curr) => ({
+      dist: acc.dist + (curr.distance_km || 0),
+      time: acc.time + (curr.duration_minutes || 0),
+      count: acc.count + 1
+    }), { dist: 0, time: 0, count: 0 });
+
   const renderCalendar = () => {
     const monthNames = ["Январь", "Февраль", "Март", "Апрель", "Май", "Июнь", "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"];
     const daysInMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
     const firstDay = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1).getDay();
     const startOffset = firstDay === 0 ? 6 : firstDay - 1;
     const daysArr = [...Array(startOffset).fill(null), ...Array.from({length: daysInMonth}, (_, i) => i + 1)];
+    const todayStr = new Date().toISOString().split('T')[0];
 
     return (
-      <div className="p-8 max-w-6xl mx-auto w-full">
-        <div className="flex justify-between items-center mb-8">
-          <h2 className="text-2xl font-black italic uppercase">Тренировочный план</h2>
-          <div className="flex items-center gap-2 bg-white/5 p-1 rounded-lg">
-            <button onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1))} className="p-1.5 hover:bg-white/10 rounded-md"><ChevronLeft size={18} /></button>
-            <h2 className="text-xs font-black uppercase tracking-widest min-w-[120px] text-center">{monthNames[currentDate.getMonth()]} {currentDate.getFullYear()}</h2>
-            <button onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1))} className="p-1.5 hover:bg-white/10 rounded-md"><ChevronRight size={18} /></button>
+      <div className="p-8 max-w-7xl mx-auto w-full animate-in fade-in duration-500">
+        
+        {/* Заголовок и навигация */}
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+          <div>
+            <h2 className="text-3xl font-black italic uppercase tracking-tighter">
+              {monthNames[currentDate.getMonth()]} <span className="text-blue-600">{currentDate.getFullYear()}</span>
+            </h2>
+            <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mt-1 flex items-center gap-2">
+              <CalendarIcon size={12}/> Твой тренировочный прогресс
+            </p>
+          </div>
+          
+          <div className="flex items-center gap-3 bg-white/5 p-1.5 rounded-2xl border border-white/5">
+            <button onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1))} className="p-2 hover:bg-white/10 rounded-xl transition-all"><ChevronLeft size={20} /></button>
+            <button onClick={() => setCurrentDate(new Date())} className="text-[10px] font-black uppercase px-4 py-2 hover:text-blue-400 transition-colors">Сегодня</button>
+            <button onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1))} className="p-2 hover:bg-white/10 rounded-xl transition-all"><ChevronRight size={20} /></button>
           </div>
         </div>
 
-        <div className="grid grid-cols-7 gap-2">
-          {['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'].map(d => (
-            <div key={d} className="text-center text-slate-700 text-[10px] font-black mb-2 uppercase">{d}</div>
-          ))}
-          {daysArr.map((day, idx) => {
-            const dateStr = day ? `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}` : null;
-            return (
-              <div 
-                key={idx} 
-                onClick={() => dateStr && setSelectedDate(dateStr)}
-                className={`min-h-[110px] p-2 border border-white/5 rounded-xl transition-all cursor-pointer ${day ? 'bg-[#0a0a0a] hover:border-blue-500/30' : 'bg-transparent border-none'}`}
-              >
-                {day && <span className="text-[10px] font-bold text-slate-600">{day}</span>}
-                {day && workouts.filter(w => w.date === dateStr).map(w => (
-                  <div key={w.id} className={`mt-1.5 p-1.5 border rounded-lg text-[9px] font-bold leading-tight ${w.source === 'FACT' ? 'bg-green-500/10 border-green-500/20 text-green-400' : 'bg-blue-500/5 border-blue-500/10 text-blue-400 border-dashed'}`}>
-                    <div className="flex items-center gap-1 truncate">
-                      {w.source === 'PLAN' && <span>🤖</span>}
-                      <span>{w.title || w.activity}</span>
-                    </div>
+        {/* SUMMARY SECTION (Саммари из скриншота) */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+          <div className="bg-[#111] border border-white/5 p-6 rounded-[2rem] flex items-center gap-5 shadow-xl">
+            <div className="w-12 h-12 bg-blue-600/20 rounded-2xl flex items-center justify-center text-blue-500"><MapPin size={24}/></div>
+            <div>
+              <p className="text-[10px] font-black text-slate-500 uppercase">Дистанция</p>
+              <p className="text-2xl font-black italic uppercase">{stats.dist.toFixed(1)} <span className="text-xs text-slate-600">км</span></p>
+            </div>
+          </div>
+          <div className="bg-[#111] border border-white/5 p-6 rounded-[2rem] flex items-center gap-5 shadow-xl">
+            <div className="w-12 h-12 bg-indigo-600/20 rounded-2xl flex items-center justify-center text-indigo-500"><Timer size={24}/></div>
+            <div>
+              <p className="text-[10px] font-black text-slate-500 uppercase">Время</p>
+              <p className="text-2xl font-black italic uppercase">{Math.floor(stats.time / 60)}ч {stats.time % 60}м</p>
+            </div>
+          </div>
+          <div className="bg-[#111] border border-white/5 p-6 rounded-[2rem] flex items-center gap-5 shadow-xl">
+            <div className="w-12 h-12 bg-emerald-600/20 rounded-2xl flex items-center justify-center text-emerald-500"><Trophy size={24}/></div>
+            <div>
+              <p className="text-[10px] font-black text-slate-500 uppercase">Активность</p>
+              <p className="text-2xl font-black italic uppercase">{stats.count} <span className="text-xs text-slate-600">забегов</span></p>
+            </div>
+          </div>
+        </div>
+
+        {/* Сетка календаря */}
+        <div className="bg-[#0c0c0e] border border-white/5 rounded-[2.5rem] p-4 shadow-2xl">
+          <div className="grid grid-cols-7 gap-1 mb-2">
+            {['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'].map(d => (
+              <div key={d} className="text-center text-slate-600 text-[10px] font-black py-4 uppercase tracking-tighter opacity-50">{d}</div>
+            ))}
+          </div>
+          <div className="grid grid-cols-7 gap-1">
+            {daysArr.map((day, idx) => {
+              const dateStr = day ? `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}` : null;
+              const isToday = dateStr === todayStr;
+
+              return (
+                <div 
+                  key={idx} 
+                  onClick={() => dateStr && setSelectedDate(dateStr)}
+                  className={`min-h-[120px] p-3 border rounded-[1.5rem] transition-all relative group cursor-pointer
+                    ${day ? 'bg-[#111]/50 border-white/[0.03] hover:bg-[#161618] hover:border-blue-500/30' : 'bg-transparent border-none pointer-events-none'}
+                    ${isToday ? 'ring-1 ring-blue-500/50 bg-blue-500/[0.03]' : ''}
+                  `}
+                >
+                  {day && (
+                    <span className={`text-[11px] font-black ${isToday ? 'text-blue-500' : 'text-slate-700'} group-hover:text-slate-400 transition-colors`}>
+                      {day}
+                    </span>
+                  )}
+                  
+                  <div className="mt-2 space-y-1">
+                    {day && workouts.filter(w => w.date === dateStr).map((w, i) => (
+                      <div 
+                        key={`${w.id}-${i}`} 
+                        className={`p-2 rounded-xl text-[9px] font-black leading-none border transition-all
+                          ${w.source === 'FACT' 
+                            ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400 shadow-lg shadow-emerald-900/10' 
+                            : 'bg-blue-600/10 border-blue-600/20 text-blue-400 border-dashed'}
+                        `}
+                      >
+                        <div className="flex items-center gap-1">
+                          {w.source === 'PLAN' ? <span>🤖</span> : <div className="w-1 h-1 bg-emerald-400 rounded-full animate-pulse"/>}
+                          <span className="truncate uppercase tracking-tighter">{w.title || w.activity}</span>
+                        </div>
+                        {w.distance_km && <div className="mt-1 opacity-50 text-[7px]">{w.distance_km} KM</div>}
+                        {w.distance && !w.distance_km && <div className="mt-1 opacity-50 text-[7px]">{w.distance}</div>}
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-            );
-          })}
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
     );
   };
 
   const renderMainContent = () => {
-    // Если выбрана дата, показываем WorkoutDetail ПОВЕРХ всего остального в контентной зоне
     if (selectedDate) {
       return <WorkoutDetail date={selectedDate} session={session} onBack={() => setSelectedDate(null)} />;
     }
@@ -100,17 +183,19 @@ const Dashboard: React.FC<{ session: any }> = ({ session }) => {
       case 'coach':
         return (
           <div className="flex flex-col items-center justify-center min-h-[80vh] text-center p-8">
-             <Brain size={40} className="text-blue-500 mb-4" />
-             <h2 className="text-3xl font-black italic uppercase">AI Тренер</h2>
-             <p className="text-slate-400 max-w-md mt-2">Анализ текущей формы и построение плана...</p>
+             <div className="w-20 h-20 bg-blue-600/20 rounded-3xl flex items-center justify-center text-blue-500 mb-6">
+                <Brain size={40} />
+             </div>
+             <h2 className="text-3xl font-black italic uppercase mb-2">AI Тренер</h2>
+             <p className="text-slate-400 max-w-md font-medium text-sm">Ваш персональный интеллект анализирует выполненные тренировки и адаптирует план.</p>
           </div>
         );
-      default: return <div className="p-8">Раздел в разработке...</div>;
+      default: return <div className="p-8">В разработке...</div>;
     }
   };
 
   return (
-    <div className="flex min-h-screen bg-[#09090b] text-white font-sans">
+    <div className="flex min-h-screen bg-[#09090b] text-white font-sans selection:bg-blue-500/30">
       <Sidebar 
         activeTab={activeTab} 
         setActiveTab={(tab) => { setActiveTab(tab); setSelectedDate(null); }} 
