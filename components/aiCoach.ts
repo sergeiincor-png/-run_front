@@ -1,104 +1,74 @@
-import { supabase } from "../supabaseClient";
+import { createClient } from "@supabase/supabase-js";
+
+const supabaseUrl = 'https://hiaqscvvxrkfmxufqyur.supabase.co';
+const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhpYXFzY3Z2eHJrZm14dWZxeXVyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc2MzM3NTgsImV4cCI6MjA4MzIwOTc1OH0.D_Y_RI2HgOXFPS-nIH5lAv79R2mEwiM3VoT1eaAxKYY';
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 export const generateInitialPlan = async (userId: string) => {
   try {
-    // 1. Получаем профиль
     const { data: profile } = await supabase.from('profiles').select('*').eq('id', userId).single();
-    if (!profile) throw new Error("Профиль не найден в БД");
+    if (!profile) throw new Error("Профиль не найден");
 
-    // 2. Ключ из .env
     const key = import.meta.env.VITE_OPENROUTER_API_KEY;
-    
-    if (!key || key === "undefined") {
-       console.error("API Key is missing in .env");
-       alert("ОШИБКА: Не найден API ключ.");
-       return { success: false };
-    }
+    if (!key) throw new Error("API Key missing");
 
-    // 3. Запрос к ИИ
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${key.trim()}`,
-        "Content-Type": "application/json",
-        "HTTP-Referer": window.location.origin
+        "Content-Type": "application/json"
       },
       body: JSON.stringify({
         "model": "openai/gpt-4o-mini",
-"messages": [
+        "messages": [
           { 
             "role": "system", 
-            "content": "Ты профессиональный тренер по бегу, говорящий на русском языке. Твоя задача — генерировать JSON." 
+            "content": "Ты экспертный тренер по бегу. Твоя задача — создавать научно обоснованные планы в формате JSON." 
           },
           { 
             "role": "user", 
-            "content": `Создай план бега на неделю для уровня ${profile.fitness_level}. 
+            "content": `Создай план на 7 дней. Атлет: уровень ${profile.fitness_level}, цель ${profile.goal_distance_km}км.
             
-            Ответ должен быть СТРОГО JSON массивом. Никакого лишнего текста.
-            Все значения должны быть НА РУССКОМ ЯЗЫКЕ.
-            
-            Формат каждого объекта:
+            Требования к JSON:
             {
-              "day": "Понедельник (День 1)",
-              "activity": "Легкий бег",
-              "distance": "5 км",  <-- Обязательно заполни цифрой, если есть бег, или поставь "-"
-              "duration": "40 мин", <-- Обязательно заполни временем
-              "description": "Беги в разговорном темпе, пульс до 145."
-            }` 
+              "activity": "название",
+              "distance": "число км",
+              "duration": "число минут",
+              "description": "ПОДРОБНОЕ описание на 200-250 знаков. ОБЯЗАТЕЛЬНО включи рекомендации по СБУ (захлест, высокое колени и т.д.) или ОФП (планка, выпады), а также акценты по технике бега и пульсу."
+            }
+            Верни СТРОГО массив JSON из 7 объектов.` 
           }
         ]
       })
     });
 
-    if (!response.ok) {
-      const errText = await response.text();
-      throw new Error(`Ошибка API (${response.status})`);
-    }
-
-    // 4. Обработка JSON
     const result = await response.json();
     const content = result.choices?.[0]?.message?.content;
-    if (!content) throw new Error("Пустой ответ от ИИ");
-
     const cleanJson = content.replace(/```json|```/g, "").trim();
-    let plan;
-    
-    try {
-        plan = JSON.parse(cleanJson);
-    } catch (e) {
-        throw new Error("Ошибка формата JSON от ИИ.");
-    }
+    const plan = JSON.parse(cleanJson);
 
-    // 5. ПОДГОТОВКА ДАТЫ (СЕГОДНЯ)
     const startDate = new Date();
-
-    // 6. БЕЗОПАСНАЯ ЗАПИСЬ С КАЛЕНДАРНЫМИ ДАТАМИ
     const formattedPlan = plan.map((w: any, index: number) => {
-      // Рассчитываем дату: Сегодня + index дней
-      const workoutDate = new Date(startDate);
+      const workoutDate = new Date();
       workoutDate.setDate(startDate.getDate() + index);
 
       return {
         user_id: userId,
-        // Записываем рассчитанную дату, чтобы база не ругалась на scheduled_date
-        scheduled_date: workoutDate.toISOString(), 
-        
-        day: w.day || `День ${index + 1}`,
-        activity: w.activity || w.workout || w.activities || "Бег", 
-        distance: w.distance || "",
-        duration: w.duration || "",
-        description: w.description || w.details || ""
+        scheduled_date: workoutDate.toISOString().split('T')[0],
+        title: w.activity,
+        activity_type: "Бег",
+        distance_km: parseFloat(w.distance) || 0,
+        duration_minutes: parseInt(w.duration) || 0,
+        description: w.description, // Теперь здесь будет богатый текст с СБУ/ОФП
+        source: 'PLAN'
       };
     });
 
-    const { error: insertError } = await supabase.from('training_plans').insert(formattedPlan);
-
-    if (insertError) throw new Error(`Ошибка БД: ${insertError.message}`);
+    await supabase.from('training_plans').delete().eq('user_id', userId);
+    await supabase.from('training_plans').insert(formattedPlan);
 
     return { success: true };
-
   } catch (err: any) {
-    alert("ОШИБКА: " + err.message);
     console.error(err);
     return { success: false };
   }
