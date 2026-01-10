@@ -10,7 +10,7 @@ export const generateInitialPlan = async (userId: string) => {
     if (!profile) throw new Error("Профиль не найден");
 
     const key = import.meta.env.VITE_OPENROUTER_API_KEY;
-    if (!key) throw new Error("API Key missing");
+    if (!key) throw new Error("API ключ не найден в .env");
 
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
@@ -23,20 +23,20 @@ export const generateInitialPlan = async (userId: string) => {
         "messages": [
           { 
             "role": "system", 
-            "content": "Ты экспертный тренер по бегу. Твоя задача — создавать научно обоснованные планы в формате JSON." 
+            "content": "Ты профессиональный тренер по бегу. Генерируй СТРОГО JSON массив объектов." 
           },
           { 
             "role": "user", 
-            "content": `Создай план на 7 дней. Атлет: уровень ${profile.fitness_level}, цель ${profile.goal_distance_km}км.
+            "content": `Создай план на 7 дней. Атлет: уровень ${profile.fitness_level}, цель ${profile.goal_distance_km} км.
             
-            Требования к JSON:
+            Требования к каждому объекту JSON:
             {
-              "activity": "название",
-              "distance": "число км",
-              "duration": "число минут",
-              "description": "ПОДРОБНОЕ описание на 200-250 знаков. ОБЯЗАТЕЛЬНО включи рекомендации по СБУ (захлест, высокое колени и т.д.) или ОФП (планка, выпады), а также акценты по технике бега и пульсу."
-            }
-            Верни СТРОГО массив JSON из 7 объектов.` 
+              "day_name": "Понедельник",
+              "activity": "Краткое название тренировки",
+              "dist_val": число (км),
+              "dur_str": "время (например, 45 мин)",
+              "desc": "ПОДРОБНОЕ описание (200-250 знаков). ВКЛЮЧИ: рекомендации по СБУ (высокое колени, захлест), ОФП (планка, выпады) и целевой пульс."
+            }` 
           }
         ]
       })
@@ -44,8 +44,7 @@ export const generateInitialPlan = async (userId: string) => {
 
     const result = await response.json();
     const content = result.choices?.[0]?.message?.content;
-    const cleanJson = content.replace(/```json|```/g, "").trim();
-    const plan = JSON.parse(cleanJson);
+    const plan = JSON.parse(content.replace(/```json|```/g, "").trim());
 
     const startDate = new Date();
     const formattedPlan = plan.map((w: any, index: number) => {
@@ -54,22 +53,25 @@ export const generateInitialPlan = async (userId: string) => {
 
       return {
         user_id: userId,
-        scheduled_date: workoutDate.toISOString().split('T')[0],
-        title: w.activity,
-        activity_type: "Бег",
-        distance_km: parseFloat(w.distance) || 0,
-        duration_minutes: parseInt(w.duration) || 0,
-        description: w.description, // Теперь здесь будет богатый текст с СБУ/ОФП
-        source: 'PLAN'
+        scheduled_date: workoutDate.toISOString().split('T')[0], // Колонка в БД: scheduled_date
+        activity: w.activity, // Колонка в БД: activity
+        distance: `${w.dist_val} км`, // Колонка в БД: distance (text)
+        target_distance_km: w.dist_val, // Колонка в БД: target_distance_km (numeric)
+        duration: w.dur_str, // Колонка в БД: duration (text)
+        description: w.desc, // Колонка в БД: description (text)
+        day: w.day_name, // Колонка в БД: day (text)
+        is_completed: false
       };
     });
 
+    // Удаляем старый план и записываем новый
     await supabase.from('training_plans').delete().eq('user_id', userId);
-    await supabase.from('training_plans').insert(formattedPlan);
+    const { error } = await supabase.from('training_plans').insert(formattedPlan);
 
+    if (error) throw error;
     return { success: true };
   } catch (err: any) {
-    console.error(err);
+    console.error("Plan Generation Error:", err);
     return { success: false };
   }
 };
